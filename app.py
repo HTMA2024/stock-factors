@@ -1624,20 +1624,29 @@ if tab_idx == 7:
                                         match_idx = np.where(row_sim >= th)[0]
                                         top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
 
-                                    pred_rets = []
+                                    pred_by_la = [[] for _ in lheads_t]
                                     for s_idx in top_k_idx:
                                         s_end_pos = s_idx + win - 1
-                                        if s_end_pos + 1 + la <= n_tune:
-                                            pred_rets.append(
-                                                (price_vals_t[s_end_pos + la] - price_vals_t[s_end_pos + 1])
-                                                / price_vals_t[s_end_pos + 1]
-                                            )
-                                    if pred_rets:
-                                        avg_pred = np.mean(pred_rets)
+                                        for li, lh in enumerate(lheads_t):
+                                            if s_end_pos + 1 + lh <= n_tune:
+                                                pred_by_la[li].append(
+                                                    (price_vals_t[s_end_pos + lh] - price_vals_t[s_end_pos + 1])
+                                                    / price_vals_t[s_end_pos + 1]
+                                                )
+                                    pred_by_la = [pr for pr in pred_by_la if pr]
+                                    if pred_by_la:
+                                        if ensemble_mode:
+                                            direction = _ensemble_dir(pred_by_la)
+                                            mid_li = len(lheads_t) // 2
+                                            avg_pred = np.mean(pred_by_la[mid_li]) if pred_by_la[mid_li] else 0
+                                        else:
+                                            avg_pred = np.mean(pred_by_la[0])
                                         act_ret = (price_vals_t[t + la - 1] - price_vals_t[t]) / price_vals_t[t]
-                                        if abs(avg_pred) < 0.001:
-                                            hit = False
-                                            neutral = True
+                                        if ensemble_mode:
+                                            hit = (direction == 1 and act_ret > 0) or (direction == -1 and act_ret < 0) or (direction == 0 and abs(act_ret) < 0.001)
+                                            neutral = (direction == 0)
+                                        elif abs(avg_pred) < 0.001:
+                                            hit, neutral = False, True
                                         else:
                                             hit = (avg_pred > 0 and act_ret > 0) or \
                                                   (avg_pred < 0 and act_ret < 0)
