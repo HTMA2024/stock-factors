@@ -1162,16 +1162,32 @@ if tab_idx == 7:
                                         if not np.isnan(s_val):
                                             sims.append(s_val)
                                 if sims and np.mean(sims) >= bt_threshold:
-                                    fut_end = min(s + bt_lookahead, n)
-                                    scores.append((np.mean(sims), s, price_vals[s:fut_end]))
+                                    lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
+                                    futs = [price_vals[s:min(s + la, n)] for la in lheads]
+                                    scores.append((np.mean(sims), s, futs))
                             if scores:
                                 scores.sort(key=lambda x: -x[0])
                                 top = scores[:bt_topk]
-                                pred_returns = []
-                                for _, _, fut in top:
-                                    if len(fut) >= 2:
-                                        pred_returns.append((fut[-1] - fut[0]) / fut[0])
-                                avg_pred = np.mean(pred_returns) if pred_returns else 0
+                                if ensemble_mode:
+                                    lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
+                                    pred_by_la = [[] for _ in lheads]
+                                    for _, _, futs in top:
+                                        for li, fut in enumerate(futs):
+                                            if len(fut) >= 2:
+                                                pred_by_la[li].append((fut[-1] - fut[0]) / fut[0])
+                                    pred_by_la = [pr for pr in pred_by_la if pr]
+                                    if pred_by_la:
+                                        direction = _ensemble_dir(pred_by_la)
+                                        mid_li = len(lheads) // 2
+                                        avg_pred = np.mean(pred_by_la[mid_li]) if pred_by_la[mid_li] else 0
+                                    else:
+                                        continue
+                                else:
+                                    pred_returns = []
+                                    for _, _, futs in top:
+                                        if len(futs) >= 2:
+                                            pred_returns.append((futs[-1] - futs[0]) / futs[0])
+                                    avg_pred = np.mean(pred_returns) if pred_returns else 0
                                 actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
                                 if abs(avg_pred) < 0.001:
                                     hit, neutral = False, True
