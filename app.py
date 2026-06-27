@@ -30,6 +30,16 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+st.markdown("""
+<style>
+    [data-testid="stDataFrame"] div[role="gridcell"],
+    [data-testid="stDataFrame"] div[role="columnheader"] {
+        justify-content: center;
+        text-align: center;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("📈 股票多因子分析 Dashboard")
 st.caption("数据源: 新浪财经 / 百度股市通 / 同花顺 | 全部免费,无需注册")
 
