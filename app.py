@@ -1173,6 +1173,9 @@ if tab_idx == 7:
                     else:
                         st.session_state.bt_results = results  # 持久化, 参数变动不清空
                         df_res = pd.DataFrame(results)
+                        total = len(df_res)
+                        hits = df_res["hit"].sum()
+                        hit_rate = hits / total * 100
 
                         # 指标卡片 (原始)
                         mc1, mc2, mc3, mc4 = st.columns(4)
