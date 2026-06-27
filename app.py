@@ -1783,6 +1783,21 @@ if tab_idx == 7:
 
                     total_trials = len(windows) * len(lookaheads) * len(thresholds) * len(topks)
                     algo_label = {"pearson": "Pearson", "dtw": "DTW", "pearson_dtw": "Pearson+DTW"}.get(bt_algo, bt_algo)
+
+                    # LightGBM 自动权重学习
+                    if use_lgbm and len(bt_factors) > 1:
+                        with st.spinner("🤖 LightGBM 学习因子权重..."):
+                            price_vals_t = df_factors.loc[valid_tune.index, "close"].values
+                            learned = _lgbm_weights(
+                                valid_tune, bt_factors, bt_window, bt_lookahead,
+                                bt_threshold, bt_topk, price_vals_t, n_tune,
+                                tune_start, train_end,  # 用训练集学权重
+                            )
+                            if learned:
+                                bt_weight_list = [learned.get(f, 0) for f in bt_factors]
+                                st.caption("LightGBM 权重: " + " | ".join(f"{f}: {learned[f]:.0%}" for f in bt_factors))
+                            else:
+                                st.caption("LightGBM 数据不足, 使用等权")
                     st.caption(f"算法: {algo_label} | 三段切分: 训练 {train_days}天 → 验证 {valid_days}天 → 测试 {test_days}天 | 搜索 {total_trials} 种参数组合...")
 
                     price_vals_t = df_factors.loc[valid_tune.index, "close"].values
