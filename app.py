@@ -1346,6 +1346,20 @@ if tab_idx == 7:
                         display.columns = ["日期", "最高r", "预测收益%", "实际收益%", "命中"]
                         st.dataframe(display, width='stretch', hide_index=True)
 
+# ---- 缓存结果展示 (参数变动不清空) ----
+if "bt_results" in st.session_state and st.session_state.bt_results is not None and not run_bt:
+    df_res = pd.DataFrame(st.session_state.bt_results)
+    total = len(df_res)
+    hits = df_res["hit"].sum()
+    hit_rate = hits / total * 100
+
+    st.caption("📋 上次回测结果 (参数已缓存, 修改参数后仍需点'开始回测'更新)")
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    with mc1: st.metric("回测天数", total)
+    with mc2: st.metric("命中次数", hits)
+    with mc3: st.metric("方向命中率", f"{hit_rate:.1f}%")
+    with mc4: pass
+
 
     # ===========================================================================
     # 自动调参 (独立于单次回测)
