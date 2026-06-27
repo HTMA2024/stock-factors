@@ -1398,7 +1398,6 @@ if tab_idx == 7:
             else:
                 valid_tune = df_factors[bt_factors].dropna()
                 n_tune = len(valid_tune)
-                # 使用 UI 日期范围, 与手动回测一致
                 bt_start_dt_t = pd.Timestamp(bt_start)
                 bt_end_dt_t = pd.Timestamp(bt_end)
                 tune_start = valid_tune.index.get_indexer([bt_start_dt_t], method="bfill")[0]
@@ -1406,26 +1405,114 @@ if tab_idx == 7:
                 tune_start = max(tune_start, bt_window * 2)
                 tune_end = min(tune_end, n_tune - 10)
 
-                if tune_end - tune_start < 30:
-                    st.warning("数据不足 (需要至少 30 个有效回测日)")
+                if tune_end - tune_start < 60:
+                    st.warning("数据不足 (walk-forward 需要至少 60 个有效回测日)")
                 else:
                     windows = [5, 10, 20, 30]
                     lookaheads = [3, 5, 10, 15]
                     thresholds = [0.7, 0.8, 0.85, 0.9, 0.95]
                     topks = [1, 3, 5]
 
+                    # Walk-forward 切分: 前70%训练, 后30%测试
+                    train_end = tune_start + int((tune_end - tune_start) * 0.7)
+                    test_start = train_end
+                    train_days = train_end - tune_start
+                    test_days = tune_end - test_start
+
                     total_trials = len(windows) * len(lookaheads) * len(thresholds) * len(topks)
                     algo_label = {"pearson": "Pearson", "dtw": "DTW", "pearson_dtw": "Pearson+DTW"}.get(bt_algo, bt_algo)
-                    st.caption(f"算法: {algo_label} | 搜索 {total_trials} 种参数组合...")
+                    st.caption(f"算法: {algo_label} | Walk-forward: 训练集 {train_days} 天, 测试集 {test_days} 天 | 搜索 {total_trials} 种参数组合...")
 
-                    tune_results = []
+                    price_vals_t = df_factors.loc[valid_tune.index, "close"].values
+
+                    def _eval_trial(win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                    combined_corr, price_vals_t, n_tune, eval_start, eval_end):
+                        results_t = []
+                        s_start = max(eval_start, win * 2)
+                        s_end = min(eval_end, n_tune - la)
+                        for t in range(s_start, s_end):
+                            tpl_idx = t - win
+                            hist_end = tpl_idx - win
+                            if hist_end >= 0:
+                                row = combined_corr[tpl_idx, :hist_end + 1]
+                                loose_mask = (row + 1) / 2 >= 0.65
+                                if loose_mask.any():
+                                    if bt_algo in ("dtw", "pearson_dtw"):
+                                        dtw_scores = []
+                                        for mi in np.where(loose_mask)[0]:
+                                            dtw_sim = 0.0
+                                            for f in bt_factors:
+                                                tpl_v = vals_dict_t[f][t - win:t]
+                                                win_v = vals_dict_t[f][mi:mi + win]
+                                                s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
+                                                if not np.isnan(s):
+                                                    dtw_sim += s
+                                            dtw_sim /= len(bt_factors)
+                                            if dtw_sim >= th:
+                                                dtw_scores.append((mi, dtw_sim))
+                                        if dtw_scores:
+                                            dtw_scores.sort(key=lambda x: -x[1])
+                                            top_k_idx = [x[0] for x in dtw_scores[:tk]]
+                                        else:
+                                            continue
+                                    else:
+                                        row_sim = (row + 1) / 2
+                                        match_idx = np.where(row_sim >= th)[0]
+                                        top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
+
+                                    pred_rets = []
+                                    for s_idx in top_k_idx:
+                                        s_end_pos = s_idx + win - 1
+                                        if s_end_pos + 1 + la <= n_tune:
+                                            pred_rets.append(
+                                                (price_vals_t[s_end_pos + la] - price_vals_t[s_end_pos + 1])
+                                                / price_vals_t[s_end_pos + 1]
+                                            )
+                                    if pred_rets:
+                                        avg_pred = np.mean(pred_rets)
+                                        act_ret = (price_vals_t[t + la - 1] - price_vals_t[t]) / price_vals_t[t]
+                                        if abs(avg_pred) < 0.001:
+                                            hit = False
+                                            neutral = True
+                                        else:
+                                            hit = (avg_pred > 0 and act_ret > 0) or \
+                                                  (avg_pred < 0 and act_ret < 0)
+                                            neutral = False
+                                        results_t.append({
+                                            "pred_return": avg_pred,
+                                            "actual_return": act_ret,
+                                            "hit": hit,
+                                            "neutral": neutral,
+                                        })
+                        return results_t
+
+                    def _compute_metrics(results):
+                        if not results:
+                            return None
+                        df = pd.DataFrame(results)
+                        sig = df[~df["neutral"]]
+                        if len(sig) == 0:
+                            return None
+                        sig["pred_sign"] = np.sign(sig["pred_return"])
+                        sig["seg"] = (sig["pred_sign"] != sig["pred_sign"].shift(1)).cumsum()
+                        segs = sig.groupby("seg")
+                        seg_total = len(segs)
+                        seg_hit = sum(1 for _, g in segs if g["hit"].sum() > len(g) / 2)
+                        return {
+                            "信号段数": seg_total,
+                            "命中段数": seg_hit,
+                            "段命中率%": round(seg_hit / seg_total * 100, 1) if seg_total > 0 else 0,
+                            "原始命中率%": round(sig["hit"].sum() / len(sig) * 100, 1),
+                            "有效信号日": len(sig),
+                            "中性日": int(df["neutral"].sum()),
+                        }
+
+                    tune_train_results = []
                     tune_progress = st.progress(0)
                     trial_idx = 0
-                    price_vals_t = df_factors.loc[valid_tune.index, "close"].values
 
                     for win in windows:
                         vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                        # 预计算 Pearson 矩阵
                         combined_corr = np.zeros((n_tune - win + 1, n_tune - win + 1))
                         for factor in bt_factors:
                             vals = vals_dict_t[factor]
@@ -1438,107 +1525,84 @@ if tab_idx == 7:
                         for la in lookaheads:
                             for th in thresholds:
                                 for tk in topks:
-                                    results_t = []
-                                    s_start = max(tune_start, win * 2)
-                                    s_end = min(tune_end, n_tune - la)
-                                    for t in range(s_start, s_end):
-                                        tpl_idx = t - win
-                                        hist_end = tpl_idx - win
-                                        if hist_end >= 0:
-                                            row = combined_corr[tpl_idx, :hist_end + 1]
-                                            # Pearson 宽松初筛, 最终阈值由 DTW/Pearson 决定
-                                            loose_mask = (row + 1) / 2 >= 0.65  # r >= 0.3, 与手动回测一致
-                                            if loose_mask.any():
-                                                if bt_algo in ("dtw", "pearson_dtw"):
-                                                    # DTW 模式: Pearson 初筛 → DTW 筛选+排名
-                                                    dtw_scores = []
-                                                    for mi in np.where(loose_mask)[0]:
-                                                        dtw_sim = 0.0
-                                                        for f in bt_factors:
-                                                            tpl_v = vals_dict_t[f][t - win:t]
-                                                            win_v = vals_dict_t[f][mi:mi + win]
-                                                            s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
-                                                            if not np.isnan(s):
-                                                                dtw_sim += s
-                                                        dtw_sim /= len(bt_factors)
-                                                        if dtw_sim >= th:
-                                                            dtw_scores.append((mi, dtw_sim))
-                                                    if dtw_scores:
-                                                        dtw_scores.sort(key=lambda x: -x[1])
-                                                        top_k_idx = [x[0] for x in dtw_scores[:tk]]
-                                                    else:
-                                                        continue
-                                                else:
-                                                    row_sim = (row + 1) / 2
-                                                    match_idx = np.where(row_sim >= th)[0]
-                                                    top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
-
-                                            pred_rets = []
-                                            for s_idx in top_k_idx:
-                                                s_end_pos = s_idx + win - 1
-                                                if s_end_pos + 1 + la <= n_tune:
-                                                    fut_s = price_vals_t[s_end_pos + 1]
-                                                    fut_e = price_vals_t[s_end_pos + la]
-                                                    pred_rets.append((fut_e - fut_s) / fut_s)
-                                            if pred_rets:
-                                                avg_pred = np.mean(pred_rets)
-                                                act_s = price_vals_t[t]
-                                                act_e = price_vals_t[t + la - 1]
-                                                act_ret = (act_e - act_s) / act_s
-                                                if abs(avg_pred) < 0.001:
-                                                    hit = False
-                                                    neutral = True
-                                                else:
-                                                    hit = (avg_pred > 0 and act_ret > 0) or \
-                                                          (avg_pred < 0 and act_ret < 0)
-                                                    neutral = False
-                                                results_t.append({
-                                                    "pred_return": avg_pred,
-                                                    "actual_return": act_ret,
-                                                    "hit": hit,
-                                                    "neutral": neutral,
-                                                })
-
-                                    if results_t:
-                                        df_t = pd.DataFrame(results_t)
-                                        df_t_signal = df_t[~df_t["neutral"]]
-                                        if len(df_t_signal) == 0:
-                                            continue
-                                        df_t_signal["pred_sign"] = np.sign(df_t_signal["pred_return"].fillna(0))
-                                        df_t_signal["seg"] = (df_t_signal["pred_sign"] != df_t_signal["pred_sign"].shift(1)).cumsum()
-                                        segs = df_t_signal.groupby("seg")
-                                        seg_total = len(segs)
-                                        seg_hit = sum(1 for _, g in segs if g["hit"].sum() > len(g) / 2)
-                                        seg_rate = seg_hit / seg_total * 100 if seg_total > 0 else 0
-                                        raw_rate = df_t_signal["hit"].sum() / len(df_t_signal) * 100
-
-                                        tune_results.append({
+                                    results_t = _eval_trial(
+                                        win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                        combined_corr, price_vals_t, n_tune,
+                                        tune_start, train_end,
+                                    )
+                                    metrics = _compute_metrics(results_t)
+                                    if metrics:
+                                        tune_train_results.append({
                                             "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
-                                            "信号段数": seg_total, "命中段数": seg_hit,
-                                            "段命中率%": round(seg_rate, 1),
-                                            "原始命中率%": round(raw_rate, 1),
-                                            "回测天数": len(df_t),
+                                            "训练段命中率%": metrics["段命中率%"],
+                                            "训练原始命中率%": metrics["原始命中率%"],
+                                            "训练信号段数": metrics["信号段数"],
+                                            "训练有效日": metrics["有效信号日"],
+                                            "训练中性日": metrics["中性日"],
+                                            "_win": win, "_la": la, "_th": th, "_tk": tk,
                                         })
-
                                     trial_idx += 1
                                     tune_progress.progress(trial_idx / total_trials)
 
-                    if tune_results:
-                        df_tune = pd.DataFrame(tune_results)
-                        df_tune = df_tune.sort_values("段命中率%", ascending=False)
-
-                        st.subheader("🏆 最优参数 Top 15")
-                        st.dataframe(
-                            df_tune.head(15),
-                            width='stretch',
-                            hide_index=True,
-                            column_config={
-                                "段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                "原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                            }
-                        )
+                    if not tune_train_results:
+                        st.warning("训练集未找到任何有效参数组合")
                     else:
-                        st.warning("未找到任何有效参数组合")
+                        df_tune_train = pd.DataFrame(tune_train_results)
+                        df_tune_train = df_tune_train.sort_values("训练段命中率%", ascending=False)
+
+                        # Walk-forward: 对 Top 15 在测试集上评估
+                        st.caption(f"对训练集 Top 15 参数组合在测试集 ({test_days} 天) 上验证...")
+                        test_progress = st.progress(0)
+                        test_rows = []
+                        for ti, combo in enumerate(df_tune_train.head(15).itertuples()):
+                            win, la, th, tk = combo._win, combo._la, combo._th, combo._tk
+                            vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
+                            combined_corr = np.zeros((n_tune - win + 1, n_tune - win + 1))
+                            for factor in bt_factors:
+                                vals = vals_dict_t[factor]
+                                W = np.lib.stride_tricks.sliding_window_view(vals, win)
+                                mean = W.mean(axis=1, keepdims=True)
+                                std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
+                                Wz = (W - mean) / std
+                                combined_corr += (Wz @ Wz.T) / (win - 1) * (1.0 / len(bt_factors))
+                            results_t = _eval_trial(
+                                win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                combined_corr, price_vals_t, n_tune,
+                                test_start, tune_end,
+                            )
+                            metrics = _compute_metrics(results_t)
+                            if metrics:
+                                test_rows.append({
+                                    "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
+                                    "训练段命中率%": combo.训练段命中率,
+                                    "测试段命中率%": metrics["段命中率%"],
+                                    "测试段数": metrics["信号段数"],
+                                    "训练原始命中率%": combo.训练原始命中率,
+                                    "测试原始命中率%": metrics["原始命中率%"],
+                                    "测试有效日": metrics["有效信号日"],
+                                    "测试中性日": metrics["中性日"],
+                                })
+                            test_progress.progress((ti + 1) / min(15, len(df_tune_train)))
+
+                        if test_rows:
+                            df_final = pd.DataFrame(test_rows)
+                            df_final = df_final.sort_values("测试段命中率%", ascending=False)
+
+                            st.subheader(f"🏆 Walk-forward 最优参数 Top 15")
+                            st.caption(f"参数搜索于训练集, 打分排序于测试集 (out-of-sample)")
+                            st.dataframe(
+                                df_final.head(15),
+                                width='stretch',
+                                hide_index=True,
+                                column_config={
+                                    "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                    "测试段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                    "训练原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                    "测试原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                }
+                            )
+                        else:
+                            st.warning("测试集未找到任何有效参数组合")
 # Tab 8: 数据表格
 # ===========================================================================
 if tab_idx == 8:
