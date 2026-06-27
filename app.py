@@ -1424,8 +1424,8 @@ if tab_idx == 7:
                                                 match_idx = np.where(row_sim >= th)[0]
                                                 top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
 
-                                                pred_rets = []
-                                                for s_idx in top_k_idx:
+                                        pred_rets = []
+                                        for s_idx in top_k_idx:
                                                     s_end_pos = s_idx + win - 1
                                                     if s_end_pos + la <= n_tune:
                                                         fut_s = vals_dict_t[bt_factors[0]][s_end_pos]
