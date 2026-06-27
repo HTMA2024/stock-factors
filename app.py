@@ -1688,23 +1688,9 @@ if tab_idx == 7:
                                                 )
                                     pred_by_la = [pr for pr in pred_by_la if pr]
                                     if pred_by_la:
-                                        if ensemble_mode:
-                                            direction = _ensemble_dir(pred_by_la)
-                                            mid_li = len(lheads_t) // 2
-                                            avg_pred = np.mean(pred_by_la[mid_li]) if pred_by_la[mid_li] else 0
-                                        else:
-                                            avg_pred = np.mean(pred_by_la[0])
+                                        direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
                                         act_ret = (price_vals_t[t + la_eval - 1] - price_vals_t[t]) / price_vals_t[t]
-                                        if ensemble_mode:
-                                            hit = (direction == 1 and act_ret > 0) or \
-                                                  (direction == -1 and act_ret < 0)
-                                            neutral = (direction == 0)
-                                        elif abs(avg_pred) < 0.001:
-                                            hit, neutral = False, True
-                                        else:
-                                            hit = (avg_pred > 0 and act_ret > 0) or \
-                                                  (avg_pred < 0 and act_ret < 0)
-                                            neutral = False
+                                        hit, neutral = _classify_hit(direction, avg_pred, act_ret, ensemble_mode)
                                         results_t.append({
                                             "pred_return": avg_pred,
                                             "actual_return": act_ret,
