@@ -1192,23 +1192,9 @@ if tab_idx == 7:
                                     # 过滤空的
                                     pred_by_la = [pr for pr in pred_by_la if pr]
                                     if pred_by_la:
-                                        if ensemble_mode:
-                                            direction = _ensemble_dir(pred_by_la)
-                                            mid_i = len(pred_by_la) // 2
-                                            avg_pred = np.mean(pred_by_la[mid_i]) if pred_by_la[mid_i] else 0
-                                        else:
-                                            avg_pred = np.mean(pred_by_la[0])
+                                        direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
                                         actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
-                                        if ensemble_mode:
-                                            hit = (direction == 1 and actual_return > 0) or \
-                                                  (direction == -1 and actual_return < 0)
-                                            neutral = (direction == 0)
-                                        elif abs(avg_pred) < 0.001:
-                                            hit, neutral = False, True
-                                        else:
-                                            hit = (avg_pred > 0 and actual_return > 0) or \
-                                                  (avg_pred < 0 and actual_return < 0)
-                                            neutral = False
+                                        hit, neutral = _classify_hit(direction, avg_pred, actual_return, ensemble_mode)
                                         res.append({
                                             "date": valid_bt.index[t], "matches": len(match_indices),
                                             "top_r": top_scores[0], "pred_return": avg_pred,
