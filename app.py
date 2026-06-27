@@ -1601,7 +1601,10 @@ if tab_idx == 7:
                             hist_end = tpl_idx - win
                             if hist_end >= 0:
                                 row = combined_corr[tpl_idx, :hist_end + 1]
-                                loose_mask = (row + 1) / 2 >= 0.65
+                                if bt_algo == "dtw":
+                                    loose_mask = np.ones(len(row), dtype=bool)
+                                else:
+                                    loose_mask = (row + 1) / 2 >= 0.65
                                 if loose_mask.any():
                                     if bt_algo in ("dtw", "pearson_dtw"):
                                         dtw_scores = []
