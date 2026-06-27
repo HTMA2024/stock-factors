@@ -251,6 +251,19 @@ def _compute_single_similarity(tpl_vals: np.ndarray, win_vals: np.ndarray,
 
 from scipy.stats import pearsonr
 
+# ---- 策略增强辅助函数 ----
+def _bt_lookaheads(bt_la, ensemble):
+    return (3, 5, 10) if ensemble else (bt_la,)
+
+def _ensemble_dir(pred_rets_by_la):
+    """pred_rets_by_la: list of lists, each inner list is returns for one lookahead"""
+    all_r = [r for la_rets in pred_rets_by_la for r in la_rets]
+    bullish = sum(1 for r in all_r if r > 0)
+    bearish = sum(1 for r in all_r if r < 0)
+    if bullish > bearish: return 1
+    if bearish > bullish: return -1
+    return 0
+
 # ---- 辅助函数 ----
 def _plotly_chart(fig, height=400):
     """统一渲染 Plotly 图表"""
