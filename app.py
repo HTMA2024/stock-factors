@@ -1440,13 +1440,13 @@ if "bt_results" in st.session_state and st.session_state.bt_results is not None:
                                         for s_idx in top_k_idx:
                                             s_end_pos = s_idx + win - 1
                                             if s_end_pos + 1 + la <= n_tune:
-                                                fut_s = vals_dict_t[bt_factors[0]][s_end_pos + 1]
-                                                fut_e = vals_dict_t[bt_factors[0]][s_end_pos + la]
+                                                fut_s = price_vals_t[s_end_pos + 1]
+                                                fut_e = price_vals_t[s_end_pos + la]
                                                 pred_rets.append((fut_e - fut_s) / fut_s)
                                         if pred_rets:
                                             avg_pred = np.mean(pred_rets)
-                                            act_s = vals_dict_t[bt_factors[0]][t]
-                                            act_e = vals_dict_t[bt_factors[0]][t + la - 1]
+                                            act_s = price_vals_t[t]
+                                            act_e = price_vals_t[t + la - 1]
                                             act_ret = (act_e - act_s) / act_s
                                             hit = (avg_pred > 0 and act_ret > 0) or (avg_pred < 0 and act_ret < 0) or \
                                                       (abs(avg_pred) < 0.001 and abs(act_ret) < 0.001)
