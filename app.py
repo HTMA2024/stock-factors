@@ -1314,16 +1314,7 @@ if tab_idx == 7:
                     else:
                         pearson_mat_bt = None
                         if bt_algo == "pearson_dtw":
-                            n_win_bt = n - win + 1
-                            pearson_mat_bt = np.zeros((n_win_bt, n_win_bt))
-                            for factor in bt_factors:
-                                vals = vals_dict[factor]
-                                W = np.lib.stride_tricks.sliding_window_view(vals, win)
-                                mean = W.mean(axis=1, keepdims=True)
-                                std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
-                                Wz = (W - mean) / std
-                                pearson_mat_bt += (Wz @ Wz.T) / (win - 1)
-                            pearson_mat_bt /= len(bt_factors)
+                            pearson_mat_bt = _pearson_corr_matrix([vals_dict[f] for f in bt_factors], win)
 
                         with st.spinner(f"正在回测 {total_days} 个交易日..."):
                             if walk_forward:
