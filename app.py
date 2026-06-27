@@ -2054,8 +2054,10 @@ if tab_idx == 7:
                             )
                             metrics = _compute_metrics(results_t)
                             if metrics:
+                                w_str = " | ".join(f"{f}:{w:.0%}" for f, w in zip(bt_factors, w_list))
                                 valid_rows.append({
                                     "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
+                                    "因子权重": w_str,
                                     "训练段命中率%": row["训练段命中率%"],
                                     "验证段命中率%": metrics["段命中率%"],
                                     "验证段数": metrics["信号段数"],
