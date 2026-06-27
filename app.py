@@ -1050,7 +1050,8 @@ if tab_idx == 7:
                 start_idx = valid_bt.index.get_indexer([bt_start_dt], method="bfill")[0]
                 end_idx = valid_bt.index.get_indexer([bt_end_dt], method="ffill")[0] + 1
                 start_idx = max(start_idx, bt_window * 2)
-                end_idx = min(end_idx, n - bt_lookahead)
+                # Bug 1 fix: ensemble 模式下 outer loop bound 用 10 天 (ensemble max horizon)
+                end_idx = min(end_idx, n - (10 if ensemble_mode else bt_lookahead))
                 full_start = start_idx  # 记住原始起始位, walk-forward 时切分要用
 
                 if walk_forward:
