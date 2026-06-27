@@ -1271,7 +1271,27 @@ if tab_idx == 7:
 
         st.divider()
         st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段 (中性日已排除), 段内过半命中才算正确")
-        sc1, sc2, sc3, sc4 = st.columns(4)
+        if has_train and len(df_train_sig) > 0:
+            df_train_sig_sorted = df_train_sig.sort_values("date")
+            df_train_sig_sorted["pred_sign"] = np.sign(df_train_sig_sorted["pred_return"])
+            df_train_sig_sorted["segment"] = (df_train_sig_sorted["pred_sign"] != df_train_sig_sorted["pred_sign"].shift(1)).cumsum()
+            train_segs = df_train_sig_sorted.groupby("segment")
+            train_seg_total = len(train_segs)
+            train_seg_hits = sum(1 for _, g in train_segs if g["hit"].sum() > len(g) / 2)
+            train_seg_rate = train_seg_hits / train_seg_total * 100 if train_seg_total > 0 else 0
+
+            tsc1, tsc2, tsc3, tsc4 = st.columns(4)
+            with tsc1:
+                st.metric("训练段命中率", f"{train_seg_rate:.1f}%")
+            with tsc2:
+                st.metric("训练段数", train_seg_total)
+            with tsc3:
+                st.metric("测试段命中率", f"{seg_hitrate:.1f}%",
+                          delta=f"{seg_hitrate - train_seg_rate:+.1f}% vs 训练")
+            with tsc4:
+                st.metric("测试段数", seg_total)
+        else:
+            sc1, sc2, sc3, sc4 = st.columns(4)
         with sc1:
             st.metric("信号段数", seg_total)
         with sc2:
