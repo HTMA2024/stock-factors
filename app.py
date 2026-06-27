@@ -1073,14 +1073,14 @@ if tab_idx == 7:
                                     for s_idx in top_k_idx:
                                         s_end = s_idx + win - 1  # 历史窗口结束位置
                                         if s_end + 1 + bt_lookahead <= n:
-                                            fut_start = vals_dict[bt_factors[0]][s_end + 1]
-                                            fut_end = vals_dict[bt_factors[0]][s_end + bt_lookahead]
+                                            fut_start = price_vals[s_end + 1]
+                                            fut_end = price_vals[s_end + bt_lookahead]
                                             pred_returns.append((fut_end - fut_start) / fut_start)
 
                                     if pred_returns:
                                         avg_pred = np.mean(pred_returns)
-                                        actual_start = vals_dict[bt_factors[0]][t]
-                                        actual_end = vals_dict[bt_factors[0]][t + bt_lookahead - 1]
+                                        actual_start = price_vals[t]
+                                        actual_end = price_vals[t + bt_lookahead - 1]
                                         actual_return = (actual_end - actual_start) / actual_start
                                         hit = (avg_pred > 0 and actual_return > 0) or (avg_pred < 0 and actual_return < 0) or \
                                               (abs(avg_pred) < 0.001 and abs(actual_return) < 0.001)
