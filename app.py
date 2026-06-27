@@ -1031,6 +1031,7 @@ if tab_idx == 7:
                     st.warning("日期范围内无有效回测日 (需要至少窗口×2 天历史数据)")
                 else:
                     vals_dict = {f: valid_bt[f].values for f in bt_factors}
+                    price_vals = df_factors.loc[valid_bt.index, "close"].values
                     win = bt_window
                     results = []
 
