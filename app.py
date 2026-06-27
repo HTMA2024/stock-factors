@@ -1392,40 +1392,28 @@ if tab_idx == 7:
         st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段 (中性日已排除), 段内过半命中才算正确")
         if has_train and len(df_train_sig) > 0:
             train_seg_total, train_seg_hits, train_seg_rate, train_seg_avg_days = _segment_stats(df_train_sig)
-
             # 第一行: 训练段
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.metric("训练段命中率", f"{train_seg_rate:.1f}%")
-            with c2:
-                st.metric("训练信号段数", train_seg_total)
-            with c3:
-                st.metric("训练命中段数", train_seg_hits)
-            with c4:
-                st.metric("训练段均天数", f"{train_seg_avg_days:.1f}")
-
+            _metric_row([
+                ("训练段命中率", f"{train_seg_rate:.1f}%", None, None),
+                ("训练信号段数", train_seg_total, None, None),
+                ("训练命中段数", train_seg_hits, None, None),
+                ("训练段均天数", f"{train_seg_avg_days:.1f}", None, None),
+            ])
             # 第二行: 测试段
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.metric("测试段命中率", f"{seg_hitrate:.1f}%",
-                          delta=f"{seg_hitrate - train_seg_rate:+.1f}% vs 训练")
-            with c2:
-                st.metric("测试信号段数", seg_total)
-            with c3:
-                st.metric("测试命中段数", seg_hits)
-            with c4:
-                st.metric("测试段均天数", f"{test_seg_avg_days:.1f}")
+            _metric_row([
+                ("测试段命中率", f"{seg_hitrate:.1f}%", f"{seg_hitrate - train_seg_rate:+.1f}% vs 训练", None),
+                ("测试信号段数", seg_total, None, None),
+                ("测试命中段数", seg_hits, None, None),
+                ("测试段均天数", f"{test_seg_avg_days:.1f}", None, None),
+            ])
         else:
-            sc1, sc2, sc3, sc4 = st.columns(4)
-            with sc1:
-                st.metric("信号段数", seg_total)
-            with sc2:
-                st.metric("命中段数", seg_hits)
-            with sc3:
-                st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
-                          delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始" if total > 0 else None)
-            with sc4:
-                st.metric("段均天数", f"{test_seg_avg_days:.1f}" if seg_total > 0 else "-")
+            _metric_row([
+                ("信号段数", seg_total, None, None),
+                ("命中段数", seg_hits, None, None),
+                ("去重叠命中率", f"{seg_hitrate:.1f}%",
+                 f"{seg_hitrate - hit_rate:+.1f}% vs 原始" if total > 0 else None, None),
+                ("段均天数", f"{test_seg_avg_days:.1f}" if seg_total > 0 else "-", None, None),
+            ])
 
         # 预测 vs 实际散点图 (全部日, 3色: 绿=命中 红=未命中 灰=中性)
         fig = go.Figure()
