@@ -367,6 +367,13 @@ def _metric_row(specs):
             st.metric(label, value, delta=delta, help=help_)
 
 
+def _resolve_date_range(index, start, end, min_start):
+    """把起止日期解析为 (start_idx, end_idx) 整数位置。start 不早于 min_start。"""
+    s = index.get_indexer([pd.Timestamp(start)], method="bfill")[0]
+    e = index.get_indexer([pd.Timestamp(end)], method="ffill")[0] + 1
+    return max(s, min_start), e
+
+
 # ---- 辅助函数 ----
 def _plotly_chart(fig, height=400):
     """统一渲染 Plotly 图表"""
