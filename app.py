@@ -1780,6 +1780,7 @@ if tab_idx == 7:
                                     "TopK": best_tk,
                                     "训练段命中率%": best_row["训练段命中率%"],
                                     "验证段命中率%": best_row["验证段命中率%"],
+                                    "验证Wilson": round(best_row["_wilson"] * 100, 1),
                                     "测试段命中率%": test_metrics["段命中率%"],
                                     "训练原始%": best_row["训练原始命中率%"],
                                     "验证原始%": best_row["验证原始命中率%"],
