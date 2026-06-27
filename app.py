@@ -1074,7 +1074,17 @@ if tab_idx == 7:
                     def _run_bt_fast(eval_start, eval_end, combined_corr):
                         res = []
                         edays = eval_end - eval_start
+                        # 择时过滤: 计算波动率阈值
+                        vol_thresh = None
+                        if timing_filter:
+                            vol_data = df_factors["vol20d"].reindex(valid_bt.index).fillna(0)
+                            vol_thresh = np.percentile(vol_data[vol_data > 0], 80)
+                        lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
                         for ti, t in enumerate(range(eval_start, eval_end)):
+                            # 择时过滤
+                            if timing_filter and vol_thresh is not None:
+                                if vol_data.iloc[t] > vol_thresh:
+                                    continue
                             tpl_idx = t - win
                             hist_end = tpl_idx - win
                             if hist_end >= 0:
