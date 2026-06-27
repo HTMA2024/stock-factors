@@ -1886,241 +1886,241 @@ if tab_idx == 7:
 
                         def _eval_trial(win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                         combined_corr, price_vals_t, n_tune, eval_start, eval_end):
-                        results_t = []
-                        lheads_t = _bt_lookaheads(la, ensemble_mode)
-                        la_eff = max(lheads_t)
-                        la_eval = lheads_t[len(lheads_t) // 2]
-                        s_start = max(eval_start, win * 2)
-                        s_end = min(eval_end, n_tune - la_eff)
-                        # 择时过滤阈值
-                        vol_thresh_t = None
-                        if timing_filter:
-                            vt_data = df_factors["vol20d"].reindex(valid_tune.index).fillna(0)
-                            vol_thresh_t = np.percentile(vt_data[vt_data > 0], 80)
-                        for t in range(s_start, s_end):
-                            # 择时过滤
-                            if timing_filter and vol_thresh_t is not None:
-                                if vt_data.iloc[t] > vol_thresh_t:
-                                    continue
-                            tpl_idx = t - win
-                            hist_end = tpl_idx - win
-                            if hist_end >= 0:
-                                row = combined_corr[tpl_idx, :hist_end + 1]
-                                if bt_algo == "dtw":
-                                    loose_mask = np.ones(len(row), dtype=bool)
-                                else:
-                                    loose_mask = (row + 1) / 2 >= 0.65
-                                if loose_mask.any():
-                                    if bt_algo in ("dtw", "pearson_dtw"):
-                                        dtw_scores = []
-                                        for mi in np.where(loose_mask)[0]:
-                                            dtw_sim = 0.0
-                                            for f in bt_factors:
-                                                tpl_v = vals_dict_t[f][t - win:t]
-                                                win_v = vals_dict_t[f][mi:mi + win]
-                                                s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
-                                                if not np.isnan(s):
-                                                    dtw_sim += s
-                                            dtw_sim /= len(bt_factors)
-                                            if dtw_sim >= th:
-                                                dtw_scores.append((mi, dtw_sim))
-                                        if dtw_scores:
-                                            dtw_scores.sort(key=lambda x: -x[1])
-                                            top_k_idx = [x[0] for x in dtw_scores[:tk]]
-                                        else:
-                                            continue
+                            results_t = []
+                            lheads_t = _bt_lookaheads(la, ensemble_mode)
+                            la_eff = max(lheads_t)
+                            la_eval = lheads_t[len(lheads_t) // 2]
+                            s_start = max(eval_start, win * 2)
+                            s_end = min(eval_end, n_tune - la_eff)
+                            # 择时过滤阈值
+                            vol_thresh_t = None
+                            if timing_filter:
+                                vt_data = df_factors["vol20d"].reindex(valid_tune.index).fillna(0)
+                                vol_thresh_t = np.percentile(vt_data[vt_data > 0], 80)
+                            for t in range(s_start, s_end):
+                                # 择时过滤
+                                if timing_filter and vol_thresh_t is not None:
+                                    if vt_data.iloc[t] > vol_thresh_t:
+                                        continue
+                                tpl_idx = t - win
+                                hist_end = tpl_idx - win
+                                if hist_end >= 0:
+                                    row = combined_corr[tpl_idx, :hist_end + 1]
+                                    if bt_algo == "dtw":
+                                        loose_mask = np.ones(len(row), dtype=bool)
                                     else:
-                                        row_sim = (row + 1) / 2
-                                        match_idx = np.where(row_sim >= th)[0]
-                                        top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
+                                        loose_mask = (row + 1) / 2 >= 0.65
+                                    if loose_mask.any():
+                                        if bt_algo in ("dtw", "pearson_dtw"):
+                                            dtw_scores = []
+                                            for mi in np.where(loose_mask)[0]:
+                                                dtw_sim = 0.0
+                                                for f in bt_factors:
+                                                    tpl_v = vals_dict_t[f][t - win:t]
+                                                    win_v = vals_dict_t[f][mi:mi + win]
+                                                    s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
+                                                    if not np.isnan(s):
+                                                        dtw_sim += s
+                                                dtw_sim /= len(bt_factors)
+                                                if dtw_sim >= th:
+                                                    dtw_scores.append((mi, dtw_sim))
+                                            if dtw_scores:
+                                                dtw_scores.sort(key=lambda x: -x[1])
+                                                top_k_idx = [x[0] for x in dtw_scores[:tk]]
+                                            else:
+                                                continue
+                                        else:
+                                            row_sim = (row + 1) / 2
+                                            match_idx = np.where(row_sim >= th)[0]
+                                            top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
 
-                                    pred_by_la = [[] for _ in lheads_t]
-                                    for s_idx in top_k_idx:
-                                        s_end_pos = s_idx + win - 1
-                                        for li, lh in enumerate(lheads_t):
-                                            if s_end_pos + 1 + lh <= n_tune:
-                                                pred_by_la[li].append(
-                                                    (price_vals_t[s_end_pos + lh] - price_vals_t[s_end_pos + 1])
-                                                    / price_vals_t[s_end_pos + 1]
-                                                )
-                                    pred_by_la = [pr for pr in pred_by_la if pr]
-                                    if pred_by_la:
-                                        direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
-                                        act_ret = (price_vals_t[t + la_eval - 1] - price_vals_t[t]) / price_vals_t[t]
-                                        hit, neutral = _classify_hit(direction, avg_pred, act_ret, ensemble_mode)
-                                        results_t.append({
-                                            "pred_return": avg_pred,
-                                            "actual_return": act_ret,
-                                            "hit": hit,
-                                            "neutral": neutral,
-                                        })
-                        return results_t
+                                        pred_by_la = [[] for _ in lheads_t]
+                                        for s_idx in top_k_idx:
+                                            s_end_pos = s_idx + win - 1
+                                            for li, lh in enumerate(lheads_t):
+                                                if s_end_pos + 1 + lh <= n_tune:
+                                                    pred_by_la[li].append(
+                                                        (price_vals_t[s_end_pos + lh] - price_vals_t[s_end_pos + 1])
+                                                        / price_vals_t[s_end_pos + 1]
+                                                    )
+                                        pred_by_la = [pr for pr in pred_by_la if pr]
+                                        if pred_by_la:
+                                            direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
+                                            act_ret = (price_vals_t[t + la_eval - 1] - price_vals_t[t]) / price_vals_t[t]
+                                            hit, neutral = _classify_hit(direction, avg_pred, act_ret, ensemble_mode)
+                                            results_t.append({
+                                                "pred_return": avg_pred,
+                                                "actual_return": act_ret,
+                                                "hit": hit,
+                                                "neutral": neutral,
+                                            })
+                            return results_t
 
-                    def _compute_metrics(results):
-                        if not results:
-                            return None
-                        df = pd.DataFrame(results)
-                        sig = df[~df["neutral"]]
-                        if len(sig) == 0:
-                            return None
-                        seg_total, seg_hit, seg_rate, _ = _segment_stats(sig)
-                        return {
-                            "信号段数": seg_total,
-                            "命中段数": seg_hit,
-                            "段命中率%": round(seg_rate, 1),
-                            "原始命中率%": round(sig["hit"].sum() / len(sig) * 100, 1),
-                            "有效信号日": len(sig),
-                            "中性日": int(df["neutral"].sum()),
-                        }
+                        def _compute_metrics(results):
+                            if not results:
+                                return None
+                            df = pd.DataFrame(results)
+                            sig = df[~df["neutral"]]
+                            if len(sig) == 0:
+                                return None
+                            seg_total, seg_hit, seg_rate, _ = _segment_stats(sig)
+                            return {
+                                "信号段数": seg_total,
+                                "命中段数": seg_hit,
+                                "段命中率%": round(seg_rate, 1),
+                                "原始命中率%": round(sig["hit"].sum() / len(sig) * 100, 1),
+                                "有效信号日": len(sig),
+                                "中性日": int(df["neutral"].sum()),
+                            }
 
-                    train_results = []
-                    tune_progress = st.progress(0)
-                    trial_idx = 0
+                        train_results = []
+                        tune_progress = st.progress(0)
+                        trial_idx = 0
 
-                    for win in windows:
-                        vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                        combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
-
-                        for la in lookaheads:
-                            for th in thresholds:
-                                for tk in topks:
-                                    results_t = _eval_trial(
-                                        win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
-                                        combined_corr, price_vals_t, n_tune,
-                                        tune_start, train_end,
-                                    )
-                                    metrics = _compute_metrics(results_t)
-                                    if metrics:
-                                        train_results.append({
-                                            "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
-                                            "训练段命中率%": metrics["段命中率%"],
-                                            "训练原始命中率%": metrics["原始命中率%"],
-                                            "训练信号段数": metrics["信号段数"],
-                                            "训练有效日": metrics["有效信号日"],
-                                            "训练中性日": metrics["中性日"],
-                                            "_win": win, "_la": la, "_th": th, "_tk": tk,
-                                        })
-                                    trial_idx += 1
-                                    tune_progress.progress(trial_idx / total_trials)
-
-                    if not train_results:
-                        st.warning("训练集未找到任何有效参数组合")
-                    else:
-                        df_train = pd.DataFrame(train_results).sort_values("训练段命中率%", ascending=False)
-                        top_n_valid = min(15, len(df_train))
-
-                        # 阶段2: 验证集从 Top 15 中选出最优
-                        st.caption(f"验证集 ({valid_days} 天) 评估训练 Top {top_n_valid} 参数...")
-                        valid_progress = st.progress(0)
-                        valid_rows = []
-                        for ti in range(top_n_valid):
-                            row = df_train.iloc[ti]
-                            win, la, th, tk = int(row["_win"]), int(row["_la"]), row["_th"], int(row["_tk"])
+                        for win in windows:
                             vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
                             combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
-                            results_t = _eval_trial(
-                                win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
-                                combined_corr, price_vals_t, n_tune,
-                                valid_start, valid_end,
-                            )
-                            metrics = _compute_metrics(results_t)
-                            if metrics:
-                                valid_rows.append({
-                                    "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
-                                    "训练段命中率%": row["训练段命中率%"],
-                                    "验证段命中率%": metrics["段命中率%"],
-                                    "验证段数": metrics["信号段数"],
-                                    "验证命中段数": metrics["命中段数"],
-                                    "训练原始命中率%": row["训练原始命中率%"],
-                                    "验证原始命中率%": metrics["原始命中率%"],
-                                    "训练信号段数": row["训练信号段数"],
-                                    "验证有效日": metrics["有效信号日"],
-                                    "验证中性日": metrics["中性日"],
-                                    "_win": win, "_la": la, "_th": th, "_tk": tk,
-                                })
-                            valid_progress.progress((ti + 1) / top_n_valid)
 
-                        if not valid_rows:
-                            st.warning("验证集未找到任何有效参数组合")
+                            for la in lookaheads:
+                                for th in thresholds:
+                                    for tk in topks:
+                                        results_t = _eval_trial(
+                                            win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                            combined_corr, price_vals_t, n_tune,
+                                            tune_start, train_end,
+                                        )
+                                        metrics = _compute_metrics(results_t)
+                                        if metrics:
+                                            train_results.append({
+                                                "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
+                                                "训练段命中率%": metrics["段命中率%"],
+                                                "训练原始命中率%": metrics["原始命中率%"],
+                                                "训练信号段数": metrics["信号段数"],
+                                                "训练有效日": metrics["有效信号日"],
+                                                "训练中性日": metrics["中性日"],
+                                                "_win": win, "_la": la, "_th": th, "_tk": tk,
+                                            })
+                                        trial_idx += 1
+                                        tune_progress.progress(trial_idx / total_trials)
+
+                        if not train_results:
+                            st.warning("训练集未找到任何有效参数组合")
                         else:
-                            df_valid = pd.DataFrame(valid_rows)
-                            df_valid["_wilson"] = df_valid.apply(
-                                lambda r: _wilson_lower(int(r["验证命中段数"]), int(r["验证段数"])), axis=1
-                            )
-                            df_valid = df_valid.sort_values("_wilson", ascending=False)
+                            df_train = pd.DataFrame(train_results).sort_values("训练段命中率%", ascending=False)
+                            top_n_valid = min(15, len(df_train))
 
-                            # 阶段3: 测试集对 Top 5 参数评估
-                            top_n_test = min(5, len(df_valid))
-                            st.caption(f"测试集 ({test_days} 天) 对验证 Top {top_n_test} 参数做无偏评估...")
-                            test_progress = st.progress(0)
-                            test_rows = []
-                            for ti in range(top_n_test):
-                                vrow = df_valid.iloc[ti]
-                                win, la, th, tk = int(vrow["_win"]), int(vrow["_la"]), vrow["_th"], int(vrow["_tk"])
+                            # 阶段2: 验证集从 Top 15 中选出最优
+                            st.caption(f"验证集 ({valid_days} 天) 评估训练 Top {top_n_valid} 参数...")
+                            valid_progress = st.progress(0)
+                            valid_rows = []
+                            for ti in range(top_n_valid):
+                                row = df_train.iloc[ti]
+                                win, la, th, tk = int(row["_win"]), int(row["_la"]), row["_th"], int(row["_tk"])
                                 vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
                                 combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
                                 results_t = _eval_trial(
-                                    win, la, th, tk, bt_algo, bt_factors,
-                                    vals_dict_t, combined_corr, price_vals_t, n_tune,
-                                    test_start, tune_end,
+                                    win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                    combined_corr, price_vals_t, n_tune,
+                                    valid_start, valid_end,
                                 )
-                                test_metrics = _compute_metrics(results_t)
-                                if test_metrics:
-                                    test_rows.append({
+                                metrics = _compute_metrics(results_t)
+                                if metrics:
+                                    valid_rows.append({
                                         "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
-                                        "训练段命中率%": vrow["训练段命中率%"],
-                                        "验证段命中率%": vrow["验证段命中率%"],
-                                        "测试段命中率%": test_metrics["段命中率%"],
-                                        "训练原始%": vrow["训练原始命中率%"],
-                                        "验证原始%": vrow["验证原始命中率%"],
-                                        "测试原始%": test_metrics["原始命中率%"],
-                                        "训练信号段": vrow["训练信号段数"],
-                                        "验证信号段": vrow["验证段数"],
-                                        "测试信号段": test_metrics["信号段数"],
-                                        "验证Wilson": round(vrow["_wilson"] * 100, 1),
+                                        "训练段命中率%": row["训练段命中率%"],
+                                        "验证段命中率%": metrics["段命中率%"],
+                                        "验证段数": metrics["信号段数"],
+                                        "验证命中段数": metrics["命中段数"],
+                                        "训练原始命中率%": row["训练原始命中率%"],
+                                        "验证原始命中率%": metrics["原始命中率%"],
+                                        "训练信号段数": row["训练信号段数"],
+                                        "验证有效日": metrics["有效信号日"],
+                                        "验证中性日": metrics["中性日"],
                                         "_win": win, "_la": la, "_th": th, "_tk": tk,
                                     })
-                                test_progress.progress((ti + 1) / top_n_test)
+                                valid_progress.progress((ti + 1) / top_n_valid)
 
-                            if not test_rows:
-                                st.warning("测试集未找到有效信号")
+                            if not valid_rows:
+                                st.warning("验证集未找到任何有效参数组合")
                             else:
-                                st.session_state.tune_df = pd.DataFrame(test_rows)
-                                st.session_state.tune_valid_df = df_valid  # 缓存验证集详情
-
-                                st.subheader(f"三段切分 Top {len(test_rows)} 参数 (训练 → 验证 → 测试)")
-                                st.caption("验证集按 Wilson 下界排序选 Top 5, 测试集全程未参与选参, 为无偏 out-of-sample 估计")
-                                show_cols = [c for c in st.session_state.tune_df.columns if not c.startswith("_")]
-                                st.dataframe(
-                                    st.session_state.tune_df[show_cols],
-                                    width='stretch',
-                                    hide_index=True,
-                                    column_config={
-                                        "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                        "验证段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                        "测试段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                        "训练原始%": st.column_config.NumberColumn(format="%.1f%%"),
-                                        "验证原始%": st.column_config.NumberColumn(format="%.1f%%"),
-                                        "测试原始%": st.column_config.NumberColumn(format="%.1f%%"),
-                                        "验证Wilson": st.column_config.NumberColumn("验证Wilson下界%", format="%.1f",
-                                            help="95%置信区间下界, 段数少时自动惩罚"),
-                                    }
+                                df_valid = pd.DataFrame(valid_rows)
+                                df_valid["_wilson"] = df_valid.apply(
+                                    lambda r: _wilson_lower(int(r["验证命中段数"]), int(r["验证段数"])), axis=1
                                 )
+                                df_valid = df_valid.sort_values("_wilson", ascending=False)
 
-                                with st.expander("验证集 Top 5 参数 (按 Wilson 下界排序)"):
-                                    vshow = [c for c in df_valid.columns if not c.startswith("_") or c == "_wilson"]
+                                # 阶段3: 测试集对 Top 5 参数评估
+                                top_n_test = min(5, len(df_valid))
+                                st.caption(f"测试集 ({test_days} 天) 对验证 Top {top_n_test} 参数做无偏评估...")
+                                test_progress = st.progress(0)
+                                test_rows = []
+                                for ti in range(top_n_test):
+                                    vrow = df_valid.iloc[ti]
+                                    win, la, th, tk = int(vrow["_win"]), int(vrow["_la"]), vrow["_th"], int(vrow["_tk"])
+                                    vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
+                                    combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
+                                    results_t = _eval_trial(
+                                        win, la, th, tk, bt_algo, bt_factors,
+                                        vals_dict_t, combined_corr, price_vals_t, n_tune,
+                                        test_start, tune_end,
+                                    )
+                                    test_metrics = _compute_metrics(results_t)
+                                    if test_metrics:
+                                        test_rows.append({
+                                            "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
+                                            "训练段命中率%": vrow["训练段命中率%"],
+                                            "验证段命中率%": vrow["验证段命中率%"],
+                                            "测试段命中率%": test_metrics["段命中率%"],
+                                            "训练原始%": vrow["训练原始命中率%"],
+                                            "验证原始%": vrow["验证原始命中率%"],
+                                            "测试原始%": test_metrics["原始命中率%"],
+                                            "训练信号段": vrow["训练信号段数"],
+                                            "验证信号段": vrow["验证段数"],
+                                            "测试信号段": test_metrics["信号段数"],
+                                            "验证Wilson": round(vrow["_wilson"] * 100, 1),
+                                            "_win": win, "_la": la, "_th": th, "_tk": tk,
+                                        })
+                                    test_progress.progress((ti + 1) / top_n_test)
+
+                                if not test_rows:
+                                    st.warning("测试集未找到有效信号")
+                                else:
+                                    st.session_state.tune_df = pd.DataFrame(test_rows)
+                                    st.session_state.tune_valid_df = df_valid  # 缓存验证集详情
+
+                                    st.subheader(f"三段切分 Top {len(test_rows)} 参数 (训练 → 验证 → 测试)")
+                                    st.caption("验证集按 Wilson 下界排序选 Top 5, 测试集全程未参与选参, 为无偏 out-of-sample 估计")
+                                    show_cols = [c for c in st.session_state.tune_df.columns if not c.startswith("_")]
                                     st.dataframe(
-                                        df_valid[vshow].head(5),
+                                        st.session_state.tune_df[show_cols],
                                         width='stretch',
                                         hide_index=True,
                                         column_config={
                                             "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
                                             "验证段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                            "训练原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                            "验证原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                            "_wilson": st.column_config.NumberColumn("验证Wilson下界", format="%.3f"),
+                                            "测试段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                            "训练原始%": st.column_config.NumberColumn(format="%.1f%%"),
+                                            "验证原始%": st.column_config.NumberColumn(format="%.1f%%"),
+                                            "测试原始%": st.column_config.NumberColumn(format="%.1f%%"),
+                                            "验证Wilson": st.column_config.NumberColumn("验证Wilson下界%", format="%.1f",
+                                                help="95%置信区间下界, 段数少时自动惩罚"),
                                         }
                                     )
+
+                                    with st.expander("验证集 Top 5 参数 (按 Wilson 下界排序)"):
+                                        vshow = [c for c in df_valid.columns if not c.startswith("_") or c == "_wilson"]
+                                        st.dataframe(
+                                            df_valid[vshow].head(5),
+                                            width='stretch',
+                                            hide_index=True,
+                                            column_config={
+                                                "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                                "验证段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                                "训练原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                                "验证原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                                "_wilson": st.column_config.NumberColumn("验证Wilson下界", format="%.3f"),
+                                            }
+                                        )
 # Tab 8: 数据表格
 # ===========================================================================
 if tab_idx == 8:
