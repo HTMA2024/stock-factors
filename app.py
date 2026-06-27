@@ -979,6 +979,16 @@ if tab_idx == 7:
                                 min_value=df_factors.index[0],
                                 max_value=df_factors.index[-1], key="bt_end")
 
+    # 策略开关
+    st.caption("策略增强")
+    e1, e2 = st.columns(2)
+    with e1:
+        ensemble_mode = st.toggle("集成预测 (多窗口投票)", key="bt_ensemble",
+                                  help="同时看 3/5/10 天, 多数表决方向")
+    with e2:
+        timing_filter = st.toggle("择时过滤 (高波动日跳过)", key="bt_timing",
+                                  help="vol20d > 历史80%分位时不出信号")
+
     # 快捷预设
     bt_preset_valid = {k: [f for f in v if f in bt_factors_pool] for k, v in FACTOR_PRESETS.items()}
     st.caption("快捷预设")
