@@ -352,6 +352,19 @@ def _segment_stats(df_signal):
     return seg_total, seg_hits, seg_rate, seg_avg_days
 
 
+def _wilson_lower(hits, n, z=1.96):
+    """Wilson 得分区间下界, 对样本量小的命中率自动惩罚。
+    hits=3, n=3 → 0.37; hits=10, n=15 → 0.42; hits=100, n=150 → 0.60; hits→n → p"""
+    if n == 0:
+        return 0.0
+    p = hits / n
+    z2 = z * z
+    denom = 1 + z2 / n
+    center = (p + z2 / (2 * n)) / denom
+    margin = z * np.sqrt(p * (1 - p) / n + z2 / (4 * n * n)) / denom
+    return max(0.0, float(center - margin))
+
+
 def _hit_color(hit, neutral):
     """命中/未命中/中性 → 颜色 (绿/红/灰)。"""
     if neutral:
