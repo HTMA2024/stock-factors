@@ -1173,10 +1173,21 @@ if tab_idx == 7:
                     if not results:
                         st.info(f"未找到任何满足阈值 {bt_threshold} 的匹配, 尝试降低阈值")
                     else:
-                        df_res = pd.DataFrame(results)
-                        total = len(df_res)
-                        hits = df_res["hit"].sum()
-                        hit_rate = hits / total * 100
+                        st.session_state.bt_results = results  # 持久化
+            elif run_tune:
+                # 自动调参结果见下方独立区块
+                pass
+            else:
+                # 仅仅切换参数, 不重算 — 清标记
+                pass
+
+    # 根据 st.session_state 决定显示内容 (参数变动不清空)
+    if "bt_results" in st.session_state and st.session_state.bt_results:
+        results = st.session_state.bt_results
+        df_res = pd.DataFrame(results)
+        total = len(df_res)
+        hits = df_res["hit"].sum()
+        hit_rate = hits / total * 100
 
                         # 指标卡片 (原始)
                         mc1, mc2, mc3, mc4 = st.columns(4)
