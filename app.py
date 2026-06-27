@@ -1136,6 +1136,21 @@ if tab_idx == 7:
         help="选择2-3个核心因子以提高计算速度"
     )
 
+    # 因子权重
+    if bt_factors:
+        st.caption("因子权重 (总和自动归一化)")
+        raw_w = {}
+        wcols = st.columns(min(len(bt_factors), 4))
+        for i, factor in enumerate(bt_factors):
+            with wcols[i % 4]:
+                raw_w[factor] = st.slider(factor, 0, 100, 100 // len(bt_factors), key=f"btw_{factor}")
+        total_w = sum(raw_w.values()) or 1
+        bt_weights = {f: w / total_w for f, w in raw_w.items()}
+        if len(bt_factors) > 1:
+            st.caption(" → ".join(f"{f}: {bt_weights[f]:.0%}" for f in bt_factors))
+    else:
+        bt_weights = {}
+
     fast_mode = st.checkbox("⚡ 快速模式 (仅 Pearson, 矩阵加速)", value=True, key="bt_fast",
                             help="预计算相关系数矩阵, 秒级出结果。关闭后逐日滑动计算, 较慢但支持 DTW。")
 
