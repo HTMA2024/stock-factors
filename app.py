@@ -1332,6 +1332,9 @@ if tab_idx == 7:
             for c in tune_cols:
                 if "命中率" in c:
                     col_cfg[c] = st.column_config.NumberColumn(format="%.1f%%")
+                elif "Wilson" in c:
+                    col_cfg[c] = st.column_config.NumberColumn("验证Wilson下界%", format="%.1f",
+                        help="95%置信区间下界, 段数少时自动惩罚")
             st.dataframe(df_t[tune_cols], width='stretch', hide_index=True, column_config=col_cfg)
 
     if "bt_results" in st.session_state and st.session_state.bt_results is None:
