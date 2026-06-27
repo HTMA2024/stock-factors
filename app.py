@@ -1384,6 +1384,7 @@ if "bt_results" in st.session_state and st.session_state.bt_results is not None:
                 tune_results = []
                 tune_progress = st.progress(0)
                 trial_idx = 0
+                price_vals_t = df_factors.loc[valid_tune.index, "close"].values
 
                 for win in windows:
                     vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
