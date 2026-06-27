@@ -1179,8 +1179,8 @@ if tab_idx == 7:
                                     pred_by_la = [pr for pr in pred_by_la if pr]
                                     if pred_by_la:
                                         direction = _ensemble_dir(pred_by_la)
-                                        mid_li = len(lheads) // 2
-                                        avg_pred = np.mean(pred_by_la[mid_li]) if pred_by_la[mid_li] else 0
+                                        mid_i = len(pred_by_la) // 2
+                                        avg_pred = np.mean(pred_by_la[mid_i]) if pred_by_la[mid_i] else 0
                                     else:
                                         continue
                                 else:
