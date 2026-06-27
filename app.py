@@ -1436,7 +1436,8 @@ if tab_idx == 7:
                                             act_s = vals_dict_t[bt_factors[0]][t]
                                             act_e = vals_dict_t[bt_factors[0]][t + la - 1]
                                             act_ret = (act_e - act_s) / act_s
-                                            hit = (avg_pred > 0 and act_ret > 0) or (avg_pred < 0 and act_ret < 0)
+                                                hit = (avg_pred > 0 and act_ret > 0) or (avg_pred < 0 and act_ret < 0) or \
+                                                      (abs(avg_pred) < 0.001 and abs(act_ret) < 0.001)
                                             results_t.append({
                                                 "pred_return": avg_pred,
                                                 "actual_return": act_ret,
