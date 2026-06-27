@@ -1642,8 +1642,8 @@ if tab_idx == 7:
                                     if pred_by_la:
                                         if ensemble_mode:
                                             direction = _ensemble_dir(pred_by_la)
-                                            mid_li = len(lheads_t) // 2
-                                            avg_pred = np.mean(pred_by_la[mid_li]) if pred_by_la[mid_li] else 0
+                                            mid_i = len(pred_by_la) // 2
+                                            avg_pred = np.mean(pred_by_la[mid_i]) if pred_by_la[mid_i] else 0
                                         else:
                                             avg_pred = np.mean(pred_by_la[0])
                                         act_ret = (price_vals_t[t + la_eval - 1] - price_vals_t[t]) / price_vals_t[t]
