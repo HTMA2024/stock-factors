@@ -1300,10 +1300,12 @@ if tab_idx == 7:
                             combined_corr = _pearson_corr_matrix([vals_dict[f] for f in bt_factors], win)
 
                         if walk_forward:
-                            st.caption(f"Walk-forward: 训练集 {train_end - full_start} 天, 测试集 {end_idx - train_end} 天")
+                            st.caption(f"三段切分: 训练 {train_end - full_start}天 → 验证 {valid_end - train_end}天 → 测试 {end_idx - test_start}天")
                             results_train = _run_bt_fast(full_start, train_end, combined_corr)
-                            results_test = _run_bt_fast(train_end, end_idx, combined_corr)
+                            results_valid = _run_bt_fast(train_end, valid_end, combined_corr)
+                            results_test = _run_bt_fast(test_start, end_idx, combined_corr)
                             st.session_state.bt_train_results = results_train if results_train else None
+                            st.session_state.bt_valid_results = results_valid if results_valid else None
                             st.session_state.bt_results = results_test if results_test else None
                         else:
                             results = _run_bt_fast(start_idx, end_idx, combined_corr)
