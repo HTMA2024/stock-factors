@@ -1394,16 +1394,7 @@ if tab_idx == 7:
         st.divider()
         st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段 (中性日已排除), 段内过半命中才算正确")
         if has_train and len(df_train_sig) > 0:
-            df_train_sig_sorted = df_train_sig.sort_values("date")
-            df_train_sig_sorted["pred_sign"] = np.sign(df_train_sig_sorted["pred_return"])
-            df_train_sig_sorted["segment"] = (df_train_sig_sorted["pred_sign"] != df_train_sig_sorted["pred_sign"].shift(1)).cumsum()
-            train_segs = df_train_sig_sorted.groupby("segment")
-            train_seg_total = len(train_segs)
-            train_seg_hits = sum(1 for _, g in train_segs if g["hit"].sum() > len(g) / 2)
-            train_seg_rate = train_seg_hits / train_seg_total * 100 if train_seg_total > 0 else 0
-            train_seg_avg_days = train_segs.agg(days=("date", "count"))["days"].mean() if train_seg_total > 0 else 0
-
-            test_seg_avg_days = segments["持续天数"].mean() if seg_total > 0 else 0
+            train_seg_total, train_seg_hits, train_seg_rate, train_seg_avg_days = _segment_stats(df_train_sig)
 
             # 第一行: 训练段
             c1, c2, c3, c4 = st.columns(4)
