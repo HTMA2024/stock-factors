@@ -1367,9 +1367,16 @@ if tab_idx == 7:
         hits = int(df_signal["hit"].sum())
         hit_rate = hits / total * 100 if total > 0 else 0
 
-        # Walk-forward 训练/测试对比
+        # Walk-forward 三段切分: 训练/验证/测试对比
         has_train = ("bt_train_results" in st.session_state and
                      st.session_state.bt_train_results is not None)
+        has_valid = ("bt_valid_results" in st.session_state and
+                     st.session_state.bt_valid_results is not None)
+        has_threeway = has_train and has_valid
+
+        train_total, train_hits, train_rate, train_neutral, train_n_total = 0, 0, 0, 0, 0
+        valid_total, valid_hits, valid_rate, valid_neutral, valid_n_total = 0, 0, 0, 0, 0
+
         if has_train:
             df_train = pd.DataFrame(st.session_state.bt_train_results)
             if "neutral" not in df_train.columns:
@@ -1381,8 +1388,20 @@ if tab_idx == 7:
             train_neutral = int(df_train["neutral"].sum())
             train_n_total = train_total + train_neutral
 
+        if has_valid:
+            df_valid = pd.DataFrame(st.session_state.bt_valid_results)
+            if "neutral" not in df_valid.columns:
+                df_valid["neutral"] = False
+            df_valid_sig = df_valid[~df_valid["neutral"]]
+            valid_total = len(df_valid_sig)
+            valid_hits = int(df_valid_sig["hit"].sum()) if valid_total > 0 else 0
+            valid_rate = valid_hits / valid_total * 100 if valid_total > 0 else 0
+            valid_neutral = int(df_valid["neutral"].sum())
+            valid_n_total = valid_total + valid_neutral
+
+        if has_threeway:
             n_total = total + neutral_count
-            # 第一行: 训练集
+            # 训练集
             _metric_row([
                 ("训练集 有效信号日", train_total, None, None),
                 ("训练集 命中次数", train_hits, None, None),
@@ -1390,7 +1409,33 @@ if tab_idx == 7:
                 ("训练集 中性日", train_neutral,
                  f"{(train_neutral / train_n_total * 100):.0f}%" if train_n_total > 0 else None, None),
             ])
-            # 第二行: 测试集
+            # 验证集
+            _metric_row([
+                ("验证集 有效信号日", valid_total, None, None),
+                ("验证集 命中次数", valid_hits, None, None),
+                ("验证集 命中率", f"{valid_rate:.1f}%",
+                 f"{valid_rate - train_rate:+.1f}% vs 训练" if train_total > 0 else None, None),
+                ("验证集 中性日", valid_neutral,
+                 f"{(valid_neutral / valid_n_total * 100):.0f}%" if valid_n_total > 0 else None, None),
+            ])
+            # 测试集
+            _metric_row([
+                ("测试集 有效信号日", total, None, None),
+                ("测试集 命中次数", hits, None, None),
+                ("测试集 命中率", f"{hit_rate:.1f}%", f"{hit_rate - valid_rate:+.1f}% vs 验证", None),
+                ("测试集 中性日", neutral_count,
+                 f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
+                 "预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算"),
+            ])
+        elif has_train:
+            n_total = total + neutral_count
+            _metric_row([
+                ("训练集 有效信号日", train_total, None, None),
+                ("训练集 命中次数", train_hits, None, None),
+                ("训练集 命中率", f"{train_rate:.1f}%", None, None),
+                ("训练集 中性日", train_neutral,
+                 f"{(train_neutral / train_n_total * 100):.0f}%" if train_n_total > 0 else None, None),
+            ])
             _metric_row([
                 ("测试集 有效信号日", total, None, None),
                 ("测试集 命中次数", hits, None, None),
