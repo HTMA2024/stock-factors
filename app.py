@@ -1272,7 +1272,7 @@ if tab_idx == 7:
         with st.expander("📊 回测结果 (点击展开)", expanded=True):
             df_res = pd.DataFrame(st.session_state.bt_results)
             if "neutral" not in df_res.columns:
-            df_res["neutral"] = False
+                df_res["neutral"] = False
             neutral_count = int(df_res["neutral"].sum())
 
             df_signal = df_res[~df_res["neutral"]]
