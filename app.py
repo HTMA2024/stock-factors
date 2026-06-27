@@ -1233,14 +1233,14 @@ if tab_idx == 7:
         label_prefix = "测试集 " if has_train else ""
         mc1, mc2, mc3, mc4 = st.columns(4)
         with mc1:
-            st.metric("有效信号日", total, help="排除预测方向不明确的中性日")
+            st.metric(f"{label_prefix}有效信号日", total, help="排除预测方向不明确的中性日")
         with mc2:
-            st.metric("命中次数", hits)
+            st.metric(f"{label_prefix}命中次数", hits)
         with mc3:
-            st.metric("方向命中率", f"{hit_rate:.1f}%")
+            st.metric(f"{label_prefix}方向命中率", f"{hit_rate:.1f}%")
         with mc4:
             n_total = total + neutral_count
-            st.metric("中性日 (已排除)", neutral_count,
+            st.metric(f"{label_prefix}中性日 (已排除)", neutral_count,
                       delta=f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
                       help="预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算")
 
