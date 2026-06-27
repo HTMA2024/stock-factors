@@ -1582,9 +1582,9 @@ if tab_idx == 7:
                     def _eval_trial(win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                     combined_corr, price_vals_t, n_tune, eval_start, eval_end):
                         results_t = []
-                        # Ensemble: horizon 固定为 10, 评估也用 10
-                        la_eff = 10 if ensemble_mode else la
-                        la_eval = 10 if ensemble_mode else la
+                        lheads_t = _bt_lookaheads(la, ensemble_mode)
+                        la_eff = max(lheads_t)
+                        la_eval = lheads_t[len(lheads_t) // 2]
                         s_start = max(eval_start, win * 2)
                         s_end = min(eval_end, n_tune - la_eff)
                         # 择时过滤阈值
@@ -1592,7 +1592,6 @@ if tab_idx == 7:
                         if timing_filter:
                             vt_data = df_factors["vol20d"].reindex(valid_tune.index).fillna(0)
                             vol_thresh_t = np.percentile(vt_data[vt_data > 0], 80)
-                        lheads_t = _bt_lookaheads(la, ensemble_mode)
                         for t in range(s_start, s_end):
                             # 择时过滤
                             if timing_filter and vol_thresh_t is not None:
