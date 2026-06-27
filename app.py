@@ -2038,6 +2038,7 @@ if tab_idx == 7:
                                     "验证有效日": metrics["有效信号日"],
                                     "验证中性日": metrics["中性日"],
                                     "_win": win, "_la": la, "_th": th, "_tk": tk,
+                                    "_weights": w_list,
                                 })
                             valid_progress.progress((ti + 1) / top_n_valid)
 
