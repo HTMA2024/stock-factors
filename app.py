@@ -1158,6 +1158,9 @@ if tab_idx == 7:
     fast_mode = st.checkbox("⚡ 快速模式 (仅 Pearson, 矩阵加速)", value=True, key="bt_fast",
                             help="预计算相关系数矩阵, 秒级出结果。关闭后逐日滑动计算, 较慢但支持 DTW。")
 
+    use_lgbm = st.checkbox("🤖 LightGBM 自动权重", value=False, key="bt_lgbm",
+                            help="用 LightGBM 从回测数据中学习各因子最优权重, 替代手动滑块")
+
     walk_forward = st.checkbox("🔬 三段切分验证 (50%训练/20%验证/30%测试)", value=True, key="bt_wf",
                                 help="三段切分, 仅显示测试集结果。关闭则全量回测。")
 
