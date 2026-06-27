@@ -1311,6 +1311,7 @@ if tab_idx == 7:
                             results = _run_bt_fast(start_idx, end_idx, combined_corr)
                             st.session_state.bt_results = results if results else None
                             st.session_state.bt_train_results = None
+                            st.session_state.bt_valid_results = None
                     else:
                         pearson_mat_bt = None
                         if bt_algo == "pearson_dtw":
