@@ -296,78 +296,79 @@ def _pearson_corr_matrix(value_arrays, win, weights=None):
 
 
 def _learn_weights(valid_data, bt_factors, win, la, th, tk, price_vals, n, eval_start, eval_end):
-    """用逻辑回归从回测数据中学习各因子最优权重。
-    收集每个回测日各因子的相似度 → 逻辑回归 → 系数归一化为权重。
+    """用 Optuna 搜索最优因子权重。
+    目标函数: 信号段命中率 (直接优化回测目标, 无采样偏差/目标错位)。
     """
+    import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    # 收集训练数据: 每个匹配的各因子 Pearson 相似度 + 是否命中
-    X_train = []
-    y_train = []
-
-    # 等权相关矩阵
     vals_dict = {f: valid_data[f].values for f in bt_factors}
-    corr = _pearson_corr_matrix([vals_dict[f] for f in bt_factors], win)
+    n_factors = len(bt_factors)
 
-    for t in range(eval_start, eval_end):
-        tpl_idx = t - win
-        hist_end = tpl_idx - win
-        if hist_end < 0:
-            continue
-        row = corr[tpl_idx, :hist_end + 1]
-        row_sim = (row + 1) / 2
-        match_idx = np.where(row_sim >= th)[0]
-        if len(match_idx) == 0:
-            continue
+    # 预计算各因子独立的相关矩阵 (O(n²) 一次, 后续加权只需线性组合)
+    factor_mats = []
+    for f in bt_factors:
+        vals = vals_dict[f]
+        W = np.lib.stride_tricks.sliding_window_view(vals, win)
+        mean = W.mean(axis=1, keepdims=True)
+        std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
+        Wz = (W - mean) / std
+        factor_mats.append((Wz @ Wz.T) / (win - 1))
 
-        # 取 Top K 匹配, 收集每个匹配的各因子相似度
-        top_k = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
-        for s_idx in top_k:
-            # 各因子相似度 (Pearson r → [0,1])
-            factor_sims = []
-            for f in bt_factors:
-                tpl_v = vals_dict[f][t - win:t]
-                win_v = vals_dict[f][s_idx:s_idx + win]
-                if np.std(tpl_v) > 0 and np.std(win_v) > 0:
-                    r, _ = pearsonr(tpl_v, win_v)
-                    factor_sims.append((r + 1) / 2)
-                else:
-                    factor_sims.append(0.5)
+    def objective(trial):
+        # 搜索权重 (单纯形约束: sum=1, each >= 0)
+        raw = [trial.suggest_float(f"w_{i}", 0.0, 1.0) for i in range(n_factors)]
+        total = sum(raw)
+        if total == 0:
+            return 0.0
+        w = [r / total for r in raw]
 
-            # 该匹配的后续收益 → 方向
-            s_end = s_idx + win - 1
-            if s_end + 1 + la <= n:
-                pred_ret = (price_vals[s_end + la] - price_vals[s_end + 1]) / price_vals[s_end + 1]
-            else:
+        # 加权相关矩阵
+        corr = sum(w[i] * factor_mats[i] for i in range(n_factors))
+
+        # 快速回测 (仅训练集)
+        hits = []
+        for t in range(eval_start, eval_end):
+            tpl_idx = t - win
+            hist_end = tpl_idx - win
+            if hist_end < 0:
+                continue
+            row = corr[tpl_idx, :hist_end + 1]
+            row_sim = (row + 1) / 2
+            match_idx = np.where(row_sim >= th)[0]
+            if len(match_idx) == 0:
+                continue
+            top_k = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
+
+            pred_rets = []
+            for s_idx in top_k:
+                s_end = s_idx + win - 1
+                if s_end + 1 + la <= n:
+                    pred_rets.append((price_vals[s_end + la] - price_vals[s_end + 1]) / price_vals[s_end + 1])
+            if not pred_rets:
                 continue
 
-            # 实际收益
-            if t + la <= n:
-                act_ret = (price_vals[t + la - 1] - price_vals[t]) / price_vals[t]
-            else:
+            avg_pred = np.mean(pred_rets)
+            if t + la > n:
                 continue
+            act_ret = (price_vals[t + la - 1] - price_vals[t]) / price_vals[t]
+            hit = (avg_pred > 0 and act_ret > 0) or (avg_pred < 0 and act_ret < 0)
+            hits.append(1 if hit else 0)
 
-            hit = (pred_ret > 0 and act_ret > 0) or (pred_ret < 0 and act_ret < 0)
-            X_train.append(factor_sims)
-            y_train.append(1 if hit else 0)
+        if len(hits) < 5:
+            return 0.0
+        return sum(hits) / len(hits)
 
-    if len(X_train) < 20:
-        return None  # 数据不足
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=50, show_progress_bar=False)
 
-    X_train = np.array(X_train)
-    y_train = np.array(y_train)
-
-    # 用逻辑回归学习权重 (系数 = 各因子对命中的线性贡献)
-    from sklearn.linear_model import LogisticRegression
-    model = LogisticRegression(max_iter=1000)
-    model.fit(X_train, y_train)
-
-    # 系数 → 归一化为权重 (去负号, 正系数=正向贡献)
-    coefs = model.coef_[0]
-    coefs = np.maximum(coefs, 0)  # 负系数置零 (该因子起反作用时不纳入)
-    if coefs.sum() == 0:
+    # 提取最优权重
+    best_raw = [study.best_params[f"w_{i}"] for i in range(n_factors)]
+    total = sum(best_raw)
+    if total == 0:
         return None
-    weights = coefs / coefs.sum()
-    return dict(zip(bt_factors, weights))
+    best_w = [r / total for r in best_raw]
+    return dict(zip(bt_factors, best_w))
 
 
 def _predict_direction(pred_by_la, ensemble):
