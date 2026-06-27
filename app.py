@@ -1806,8 +1806,8 @@ if tab_idx == 7:
                                     }
                                 )
 
-                                with st.expander("验证集 Top 5 参数 (仅供参考导向)"):
-                                    show_cols = [c for c in df_valid.columns if not c.startswith("_")]
+                                with st.expander("验证集 Top 5 参数 (按 Wilson 下界排序, 仅供参考)"):
+                                    show_cols = [c for c in df_valid.columns if not c.startswith("_") or c == "_wilson"]
                                     st.dataframe(
                                         df_valid[show_cols].head(5),
                                         width='stretch',
@@ -1817,6 +1817,7 @@ if tab_idx == 7:
                                             "验证段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
                                             "训练原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
                                             "验证原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                            "_wilson": st.column_config.NumberColumn("验证Wilson下界", format="%.3f"),
                                         }
                                     )
                             else:
