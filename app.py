@@ -1191,8 +1191,15 @@ if tab_idx == 7:
                                 st.session_state.bt_results = results if results else None
                                 st.session_state.bt_train_results = None
 
-
     # ---- 回测结果展示 (从缓存读取, 参数变动不清空) ----
+    if "bt_results" in st.session_state and st.session_state.bt_results is None:
+        has_train_none = ("bt_train_results" not in st.session_state or
+                          st.session_state.bt_train_results is None)
+        if has_train_none:
+            st.info(f"未找到任何满足阈值 {bt_threshold} 的匹配, 尝试降低阈值")
+        elif st.session_state.bt_train_results is not None:
+            st.info("测试集无有效信号, 训练集有结果但不在测试集复现 — 可能过拟合了")
+
     if "bt_results" in st.session_state and st.session_state.bt_results is not None:
         df_res = pd.DataFrame(st.session_state.bt_results)
         if "neutral" not in df_res.columns:
