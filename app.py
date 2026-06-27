@@ -1028,6 +1028,7 @@ if tab_idx == 7:
                 end_idx = valid_bt.index.get_indexer([bt_end_dt], method="ffill")[0] + 1
                 start_idx = max(start_idx, bt_window * 2)
                 end_idx = min(end_idx, n - bt_lookahead)
+                full_start = start_idx  # 记住原始起始位, walk-forward 时切分要用
 
                 if walk_forward:
                     train_end = start_idx + int((end_idx - start_idx) * 0.7)
