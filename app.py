@@ -2099,8 +2099,10 @@ if tab_idx == 7:
                                 )
                                 test_metrics = _compute_metrics(results_t)
                                 if test_metrics:
+                                    w_str = " | ".join(f"{f}:{w:.0%}" for f, w in zip(bt_factors, w_list))
                                     test_rows.append({
                                         "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
+                                        "因子权重": w_str,
                                         "训练段命中率%": vrow["训练段命中率%"],
                                         "验证段命中率%": vrow["验证段命中率%"],
                                         "测试段命中率%": test_metrics["段命中率%"],
