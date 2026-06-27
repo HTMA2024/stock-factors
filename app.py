@@ -1583,7 +1583,7 @@ if tab_idx == 7:
                                     combined_corr, price_vals_t, n_tune, eval_start, eval_end):
                         results_t = []
                         s_start = max(eval_start, win * 2)
-                        s_end = min(eval_end, n_tune - max(_bt_lookaheads(la, ensemble_mode)))
+                            s_end = min(eval_end, n_tune - la_eff)
                         # 择时过滤阈值
                         vol_thresh_t = None
                         if timing_filter:
