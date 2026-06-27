@@ -1260,6 +1260,7 @@ if tab_idx == 7:
                                 st.session_state.bt_train_results = None
 
     # ---- 回测结果展示 (从缓存读取, 参数变动不清空) ----
+    col_manual, col_tune = st.columns(2)
     if "bt_results" in st.session_state and st.session_state.bt_results is None:
         has_train_none = ("bt_train_results" not in st.session_state or
                           st.session_state.bt_train_results is None)
@@ -1269,473 +1270,430 @@ if tab_idx == 7:
             st.info("测试集无有效信号, 训练集有结果但不在测试集复现 — 可能过拟合了")
 
     if "bt_results" in st.session_state and st.session_state.bt_results is not None:
-        df_res = pd.DataFrame(st.session_state.bt_results)
-        if "neutral" not in df_res.columns:
-            df_res["neutral"] = False
-        neutral_count = int(df_res["neutral"].sum())
+    with col_manual:
+            df_res = pd.DataFrame(st.session_state.bt_results)
+            if "neutral" not in df_res.columns:
+                df_res["neutral"] = False
+            neutral_count = int(df_res["neutral"].sum())
 
-        df_signal = df_res[~df_res["neutral"]]
-        total = len(df_signal)
-        hits = int(df_signal["hit"].sum())
-        hit_rate = hits / total * 100 if total > 0 else 0
+            df_signal = df_res[~df_res["neutral"]]
+            total = len(df_signal)
+            hits = int(df_signal["hit"].sum())
+            hit_rate = hits / total * 100 if total > 0 else 0
 
-        # Walk-forward 训练/测试对比
-        has_train = ("bt_train_results" in st.session_state and
-                     st.session_state.bt_train_results is not None)
-        if has_train:
-            df_train = pd.DataFrame(st.session_state.bt_train_results)
-            if "neutral" not in df_train.columns:
-                df_train["neutral"] = False
-            df_train_sig = df_train[~df_train["neutral"]]
-            train_total = len(df_train_sig)
-            train_hits = int(df_train_sig["hit"].sum()) if train_total > 0 else 0
-            train_rate = train_hits / train_total * 100 if train_total > 0 else 0
-            train_neutral = int(df_train["neutral"].sum())
-            train_n_total = train_total + train_neutral
+            # Walk-forward 训练/测试对比
+            has_train = ("bt_train_results" in st.session_state and
+                         st.session_state.bt_train_results is not None)
+            if has_train:
+                df_train = pd.DataFrame(st.session_state.bt_train_results)
+                if "neutral" not in df_train.columns:
+                    df_train["neutral"] = False
+                df_train_sig = df_train[~df_train["neutral"]]
+                train_total = len(df_train_sig)
+                train_hits = int(df_train_sig["hit"].sum()) if train_total > 0 else 0
+                train_rate = train_hits / train_total * 100 if train_total > 0 else 0
+                train_neutral = int(df_train["neutral"].sum())
+                train_n_total = train_total + train_neutral
 
-            # 第一行: 训练集
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.metric("训练集 有效信号日", train_total)
-            with c2:
-                st.metric("训练集 命中次数", train_hits)
-            with c3:
-                st.metric("训练集 命中率", f"{train_rate:.1f}%")
-            with c4:
-                st.metric("训练集 中性日", train_neutral,
-                          delta=f"{(train_neutral / train_n_total * 100):.0f}%" if train_n_total > 0 else None)
+                # 第一行: 训练集
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.metric("训练集 有效信号日", train_total)
+                with c2:
+                    st.metric("训练集 命中次数", train_hits)
+                with c3:
+                    st.metric("训练集 命中率", f"{train_rate:.1f}%")
+                with c4:
+                    st.metric("训练集 中性日", train_neutral,
+                              delta=f"{(train_neutral / train_n_total * 100):.0f}%" if train_n_total > 0 else None)
 
-            # 第二行: 测试集
-            n_total = total + neutral_count
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.metric("测试集 有效信号日", total)
-            with c2:
-                st.metric("测试集 命中次数", hits)
-            with c3:
-                st.metric("测试集 命中率", f"{hit_rate:.1f}%",
-                          delta=f"{hit_rate - train_rate:+.1f}% vs 训练")
-            with c4:
-                st.metric("测试集 中性日", neutral_count,
-                          delta=f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
-                          help="预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算")
-        else:
-            # 无 walk-forward: 一行
-            mc1, mc2, mc3, mc4 = st.columns(4)
-            with mc1:
-                st.metric("有效信号日", total, help="排除预测方向不明确的中性日")
-            with mc2:
-                st.metric("命中次数", hits)
-            with mc3:
-                st.metric("方向命中率", f"{hit_rate:.1f}%")
-            with mc4:
+                # 第二行: 测试集
                 n_total = total + neutral_count
-                st.metric("中性日 (已排除)", neutral_count,
-                          delta=f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
-                          help="预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算")
-
-        # ---- 去重叠统计 ----
-        if len(df_signal) > 0:
-            df_sig_sorted = df_signal.sort_values("date")
-            df_sig_sorted["pred_sign"] = np.sign(df_sig_sorted["pred_return"].fillna(0))
-            df_sig_sorted["segment"] = (df_sig_sorted["pred_sign"] != df_sig_sorted["pred_sign"].shift(1)).cumsum()
-            segments = df_sig_sorted.groupby("segment").agg(
-                起始日期=("date", "first"),
-                结束日期=("date", "last"),
-                持续天数=("date", "count"),
-                预测方向=("pred_sign", "first"),
-                命中天数=("hit", "sum"),
-                平均预测收益=("pred_return", "mean"),
-                平均实际收益=("actual_return", "mean"),
-            )
-            segments["预测方向"] = segments["预测方向"].map({1: "看涨", -1: "看跌"})
-            seg_total = len(segments)
-            seg_hits = (segments["命中天数"] > segments["持续天数"] / 2).sum()
-            seg_hitrate = seg_hits / seg_total * 100 if seg_total > 0 else 0
-        else:
-            seg_total = 0
-            seg_hits = 0
-            seg_hitrate = 0
-            segments = pd.DataFrame()
-            df_sig_sorted = df_signal
-
-        st.divider()
-        st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段 (中性日已排除), 段内过半命中才算正确")
-        if has_train and len(df_train_sig) > 0:
-            df_train_sig_sorted = df_train_sig.sort_values("date")
-            df_train_sig_sorted["pred_sign"] = np.sign(df_train_sig_sorted["pred_return"])
-            df_train_sig_sorted["segment"] = (df_train_sig_sorted["pred_sign"] != df_train_sig_sorted["pred_sign"].shift(1)).cumsum()
-            train_segs = df_train_sig_sorted.groupby("segment")
-            train_seg_total = len(train_segs)
-            train_seg_hits = sum(1 for _, g in train_segs if g["hit"].sum() > len(g) / 2)
-            train_seg_rate = train_seg_hits / train_seg_total * 100 if train_seg_total > 0 else 0
-            train_seg_avg_days = train_segs.agg(days=("date", "count"))["days"].mean() if train_seg_total > 0 else 0
-
-            test_seg_avg_days = segments["持续天数"].mean() if seg_total > 0 else 0
-
-            # 第一行: 训练段
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.metric("训练段命中率", f"{train_seg_rate:.1f}%")
-            with c2:
-                st.metric("训练信号段数", train_seg_total)
-            with c3:
-                st.metric("训练命中段数", train_seg_hits)
-            with c4:
-                st.metric("训练段均天数", f"{train_seg_avg_days:.1f}")
-
-            # 第二行: 测试段
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.metric("测试段命中率", f"{seg_hitrate:.1f}%",
-                          delta=f"{seg_hitrate - train_seg_rate:+.1f}% vs 训练")
-            with c2:
-                st.metric("测试信号段数", seg_total)
-            with c3:
-                st.metric("测试命中段数", seg_hits)
-            with c4:
-                st.metric("测试段均天数", f"{test_seg_avg_days:.1f}")
-        else:
-            sc1, sc2, sc3, sc4 = st.columns(4)
-            with sc1:
-                st.metric("信号段数", seg_total)
-            with sc2:
-                st.metric("命中段数", seg_hits)
-            with sc3:
-                st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
-                          delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始" if total > 0 else None)
-            with sc4:
-                st.metric("段均天数", f"{segments['持续天数'].mean():.1f}" if seg_total > 0 else "-")
-
-        # 预测 vs 实际散点图 (全部日, 3色: 绿=命中 红=未命中 灰=中性)
-        fig = go.Figure()
-        hover_texts = [
-            f"{d.strftime('%Y-%m-%d')}<br>预测: {p*100:+.2f}%<br>实际: {a*100:+.2f}%<br>匹配数: {m}"
-            for d, p, a, m in zip(df_res["date"], df_res["pred_return"],
-                                  df_res["actual_return"], df_res.get("matches", [0] * len(df_res)))
-        ]
-        color_map = []
-        for h, n in zip(df_res["hit"], df_res["neutral"]):
-            if n:
-                color_map.append("#9e9e9e")
-            elif h:
-                color_map.append("#26a69a")
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.metric("测试集 有效信号日", total)
+                with c2:
+                    st.metric("测试集 命中次数", hits)
+                with c3:
+                    st.metric("测试集 命中率", f"{hit_rate:.1f}%",
+                              delta=f"{hit_rate - train_rate:+.1f}% vs 训练")
+                with c4:
+                    st.metric("测试集 中性日", neutral_count,
+                              delta=f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
+                              help="预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算")
             else:
-                color_map.append("#ef5350")
-        fig.add_trace(go.Scatter(
-            x=df_res["pred_return"] * 100, y=df_res["actual_return"] * 100,
-            mode="markers",
-            marker=dict(color=color_map, size=7, opacity=0.6),
-            customdata=hover_texts,
-            hovertemplate="%{customdata}<extra></extra>",
-            name="绿=命中 红=未命中 灰=中性",
-        ))
-        fig.add_hline(y=0, line_dash="dot", line_color="gray")
-        fig.add_vline(x=0, line_dash="dot", line_color="gray")
-        fig.update_layout(
-            title=f"预测 vs 实际 (命中率 {hit_rate:.1f}%, 排除 {neutral_count} 个中性日)",
-            xaxis_title="预测收益率 (%)", yaxis_title="实际收益率 (%)",
-            height=400,
-        )
-        _plotly_chart(fig, height=450)
+                # 无 walk-forward: 一行
+                mc1, mc2, mc3, mc4 = st.columns(4)
+                with mc1:
+                    st.metric("有效信号日", total, help="排除预测方向不明确的中性日")
+                with mc2:
+                    st.metric("命中次数", hits)
+                with mc3:
+                    st.metric("方向命中率", f"{hit_rate:.1f}%")
+                with mc4:
+                    n_total = total + neutral_count
+                    st.metric("中性日 (已排除)", neutral_count,
+                              delta=f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
+                              help="预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算")
 
-        # 按预测方向分组的统计 (仅有效信号)
-        if len(df_signal) > 0:
-            st.subheader("按预测方向分组 (仅有效信号)")
-            df_signal["pred_dir"] = df_signal["pred_return"].apply(
-                lambda x: "看涨" if x > 0.001 else "看跌"
-            )
-            dir_stats = df_signal.groupby("pred_dir").agg(
-                次数=("hit", "count"),
-                命中率=("hit", lambda x: x.sum() / len(x) * 100),
-                平均实际收益=("actual_return", lambda x: np.mean(x) * 100),
-            ).round(1)
-            st.dataframe(dir_stats, width='stretch')
-
-        # ---- 时间分布 ----
-        st.subheader("命中/未命中 时间分布")
-
-        # 命中/未命中时间线
-        fig_tl = go.Figure()
-        timeline_colors = []
-        for h, n in zip(df_res["hit"], df_res["neutral"]):
-            if n:
-                timeline_colors.append("#9e9e9e")
-            elif h:
-                timeline_colors.append("#26a69a")
+            # ---- 去重叠统计 ----
+            if len(df_signal) > 0:
+                df_sig_sorted = df_signal.sort_values("date")
+                df_sig_sorted["pred_sign"] = np.sign(df_sig_sorted["pred_return"].fillna(0))
+                df_sig_sorted["segment"] = (df_sig_sorted["pred_sign"] != df_sig_sorted["pred_sign"].shift(1)).cumsum()
+                segments = df_sig_sorted.groupby("segment").agg(
+                    起始日期=("date", "first"),
+                    结束日期=("date", "last"),
+                    持续天数=("date", "count"),
+                    预测方向=("pred_sign", "first"),
+                    命中天数=("hit", "sum"),
+                    平均预测收益=("pred_return", "mean"),
+                    平均实际收益=("actual_return", "mean"),
+                )
+                segments["预测方向"] = segments["预测方向"].map({1: "看涨", -1: "看跌"})
+                seg_total = len(segments)
+                seg_hits = (segments["命中天数"] > segments["持续天数"] / 2).sum()
+                seg_hitrate = seg_hits / seg_total * 100 if seg_total > 0 else 0
             else:
-                timeline_colors.append("#ef5350")
-        fig_tl.add_trace(go.Scatter(
-            x=df_res["date"], y=[1] * len(df_res),
-            mode="markers",
-            marker=dict(
-                color=timeline_colors, size=6, symbol="square",
-            ),
-            name="绿=命中, 红=未命中, 灰=中性",
-            customdata=[
-                f"{d.strftime('%Y-%m-%d')}<br>{'中性' if n else ('✓ 命中' if h else '✗ 未命中')}<br>预测: {p*100:+.2f}% 实际: {a*100:+.2f}%"
-                for d, h, n, p, a in zip(df_res["date"], df_res["hit"], df_res["neutral"],
-                                          df_res["pred_return"], df_res["actual_return"])
-            ],
-            hovertemplate="%{customdata}<extra></extra>",
-        ))
-        fig_tl.update_layout(
-            title="命中/未命中时间线 (每个方块 = 一次预测, 灰=中性已排除)",
-            height=120, yaxis=dict(showticklabels=False, range=[0.5, 1.5]),
-            margin=dict(l=20, r=20, t=30, b=20),
-        )
-        _plotly_chart(fig_tl, height=160)
+                seg_total = 0
+                seg_hits = 0
+                seg_hitrate = 0
+                segments = pd.DataFrame()
+                df_sig_sorted = df_signal
 
-        # 月度命中率 (仅有效信号)
-        if len(df_signal) > 0:
-            df_sig_sorted["month"] = df_sig_sorted["date"].dt.to_period("M")
-            monthly = df_sig_sorted.groupby("month").agg(
-                信号数=("hit", "count"),
-                命中=("hit", "sum"),
-            )
-            monthly["命中率"] = (monthly["命中"] / monthly["信号数"] * 100).round(1)
-            monthly.index = monthly.index.astype(str)
+            st.divider()
+            st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段 (中性日已排除), 段内过半命中才算正确")
+            if has_train and len(df_train_sig) > 0:
+                df_train_sig_sorted = df_train_sig.sort_values("date")
+                df_train_sig_sorted["pred_sign"] = np.sign(df_train_sig_sorted["pred_return"])
+                df_train_sig_sorted["segment"] = (df_train_sig_sorted["pred_sign"] != df_train_sig_sorted["pred_sign"].shift(1)).cumsum()
+                train_segs = df_train_sig_sorted.groupby("segment")
+                train_seg_total = len(train_segs)
+                train_seg_hits = sum(1 for _, g in train_segs if g["hit"].sum() > len(g) / 2)
+                train_seg_rate = train_seg_hits / train_seg_total * 100 if train_seg_total > 0 else 0
+                train_seg_avg_days = train_segs.agg(days=("date", "count"))["days"].mean() if train_seg_total > 0 else 0
 
-            fig_monthly = go.Figure()
-            fig_monthly.add_trace(go.Bar(
-                x=monthly.index, y=monthly["信号数"],
-                name="信号数", marker_color="rgba(128,128,128,0.3)", yaxis="y",
-            ))
-            fig_monthly.add_trace(go.Scatter(
-                x=monthly.index, y=monthly["命中率"],
-                name="命中率%", mode="lines+markers",
-                line=dict(color="#1f77b4", width=2), yaxis="y2",
-            ))
-            min_x = monthly.index[0] if len(monthly) > 0 else ""
-            max_x = monthly.index[-1] if len(monthly) > 0 else ""
-            fig_monthly.add_shape(type="line", x0=min_x, x1=max_x, y0=50, y1=50,
-                                  line=dict(dash="dot", color="gray", width=1), yref="y2")
-            fig_monthly.update_layout(
-                title="逐月命中率 (排除中性日)",
-                yaxis=dict(title="信号数", side="left"),
-                yaxis2=dict(title="命中率%", overlaying="y", side="right", range=[0, 100]),
-                height=300,
-                legend=dict(x=0.01, y=0.99),
-            )
-            _plotly_chart(fig_monthly, height=350)
+                test_seg_avg_days = segments["持续天数"].mean() if seg_total > 0 else 0
 
-            # 如果数据足够, 加滚动命中率
-            if len(df_sig_sorted) >= 30:
-                df_sig_sorted["rolling_hit"] = df_sig_sorted["hit"].rolling(30, min_periods=10).mean() * 100
-                fig_roll = go.Figure()
-                fig_roll.add_trace(go.Scatter(
-                    x=df_sig_sorted["date"], y=df_sig_sorted["rolling_hit"],
-                    mode="lines", name="30日滚动命中率%",
-                    line=dict(color="#1f77b4", width=2),
-                    fill="tozeroy", fillcolor="rgba(31,119,180,0.1)",
-                ))
-                fig_roll.add_hline(y=50, line_dash="dot", line_color="gray")
-                fig_roll.update_layout(title="30 日滚动命中率 (排除中性日)", height=250)
-                _plotly_chart(fig_roll, height=300)
+                # 第一行: 训练段
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.metric("训练段命中率", f"{train_seg_rate:.1f}%")
+                with c2:
+                    st.metric("训练信号段数", train_seg_total)
+                with c3:
+                    st.metric("训练命中段数", train_seg_hits)
+                with c4:
+                    st.metric("训练段均天数", f"{train_seg_avg_days:.1f}")
 
-        # 详细结果表格
-        st.subheader("最近 30 次预测")
-        recent = df_res.tail(30).sort_values("date", ascending=False)
-        display = recent[["date", "top_r", "pred_return", "actual_return", "hit", "neutral"]].copy()
-        display["date"] = display["date"].apply(lambda x: x.strftime("%Y-%m-%d"))
-        display["pred_return"] = (display["pred_return"] * 100).round(2)
-        display["actual_return"] = (display["actual_return"] * 100).round(2)
-        display["top_r"] = display["top_r"].round(4)
-        display.columns = ["日期", "最高r", "预测收益%", "实际收益%", "命中", "中性"]
-        st.dataframe(display, width='stretch', hide_index=True)
-
-
-        # ===========================================================================
-        # 自动调参 (独立于单次回测)
-        # ===========================================================================
-        if run_tune:
-            if not bt_factors:
-                st.warning("请选择匹配因子")
+                # 第二行: 测试段
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.metric("测试段命中率", f"{seg_hitrate:.1f}%",
+                              delta=f"{seg_hitrate - train_seg_rate:+.1f}% vs 训练")
+                with c2:
+                    st.metric("测试信号段数", seg_total)
+                with c3:
+                    st.metric("测试命中段数", seg_hits)
+                with c4:
+                    st.metric("测试段均天数", f"{test_seg_avg_days:.1f}")
             else:
-                valid_tune = df_factors[bt_factors].dropna()
-                n_tune = len(valid_tune)
-                bt_start_dt_t = pd.Timestamp(bt_start)
-                bt_end_dt_t = pd.Timestamp(bt_end)
-                tune_start = valid_tune.index.get_indexer([bt_start_dt_t], method="bfill")[0]
-                tune_end = valid_tune.index.get_indexer([bt_end_dt_t], method="ffill")[0] + 1
-                tune_start = max(tune_start, bt_window * 2)
-                tune_end = min(tune_end, n_tune - 10)
+                sc1, sc2, sc3, sc4 = st.columns(4)
+                with sc1:
+                    st.metric("信号段数", seg_total)
+                with sc2:
+                    st.metric("命中段数", seg_hits)
+                with sc3:
+                    st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
+                              delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始" if total > 0 else None)
+                with sc4:
+                    st.metric("段均天数", f"{segments['持续天数'].mean():.1f}" if seg_total > 0 else "-")
 
-                if tune_end - tune_start < 60:
-                    st.warning("数据不足 (walk-forward 需要至少 60 个有效回测日)")
+            # 预测 vs 实际散点图 (全部日, 3色: 绿=命中 红=未命中 灰=中性)
+            fig = go.Figure()
+            hover_texts = [
+                f"{d.strftime('%Y-%m-%d')}<br>预测: {p*100:+.2f}%<br>实际: {a*100:+.2f}%<br>匹配数: {m}"
+                for d, p, a, m in zip(df_res["date"], df_res["pred_return"],
+                                      df_res["actual_return"], df_res.get("matches", [0] * len(df_res)))
+            ]
+            color_map = []
+            for h, n in zip(df_res["hit"], df_res["neutral"]):
+                if n:
+                    color_map.append("#9e9e9e")
+                elif h:
+                    color_map.append("#26a69a")
                 else:
-                    windows = [5, 10, 20, 30]
-                    lookaheads = [3, 5, 10, 15]
-                    thresholds = [0.7, 0.8, 0.85, 0.9, 0.95]
-                    topks = [1, 3, 5]
+                    color_map.append("#ef5350")
+            fig.add_trace(go.Scatter(
+                x=df_res["pred_return"] * 100, y=df_res["actual_return"] * 100,
+                mode="markers",
+                marker=dict(color=color_map, size=7, opacity=0.6),
+                customdata=hover_texts,
+                hovertemplate="%{customdata}<extra></extra>",
+                name="绿=命中 红=未命中 灰=中性",
+            ))
+            fig.add_hline(y=0, line_dash="dot", line_color="gray")
+            fig.add_vline(x=0, line_dash="dot", line_color="gray")
+            fig.update_layout(
+                title=f"预测 vs 实际 (命中率 {hit_rate:.1f}%, 排除 {neutral_count} 个中性日)",
+                xaxis_title="预测收益率 (%)", yaxis_title="实际收益率 (%)",
+                height=400,
+            )
+            _plotly_chart(fig, height=450)
 
-                    # Walk-forward 切分: 前70%训练, 后30%测试
-                    train_end = tune_start + int((tune_end - tune_start) * 0.7)
-                    test_start = train_end
-                    train_days = train_end - tune_start
-                    test_days = tune_end - test_start
+            # 按预测方向分组的统计 (仅有效信号)
+            if len(df_signal) > 0:
+                st.subheader("按预测方向分组 (仅有效信号)")
+                df_signal["pred_dir"] = df_signal["pred_return"].apply(
+                    lambda x: "看涨" if x > 0.001 else "看跌"
+                )
+                dir_stats = df_signal.groupby("pred_dir").agg(
+                    次数=("hit", "count"),
+                    命中率=("hit", lambda x: x.sum() / len(x) * 100),
+                    平均实际收益=("actual_return", lambda x: np.mean(x) * 100),
+                ).round(1)
+                st.dataframe(dir_stats, width='stretch')
 
-                    total_trials = len(windows) * len(lookaheads) * len(thresholds) * len(topks)
-                    algo_label = {"pearson": "Pearson", "dtw": "DTW", "pearson_dtw": "Pearson+DTW"}.get(bt_algo, bt_algo)
-                    st.caption(f"算法: {algo_label} | Walk-forward: 训练集 {train_days} 天, 测试集 {test_days} 天 | 搜索 {total_trials} 种参数组合...")
+            # ---- 时间分布 ----
+            st.subheader("命中/未命中 时间分布")
 
-                    price_vals_t = df_factors.loc[valid_tune.index, "close"].values
+            # 命中/未命中时间线
+            fig_tl = go.Figure()
+            timeline_colors = []
+            for h, n in zip(df_res["hit"], df_res["neutral"]):
+                if n:
+                    timeline_colors.append("#9e9e9e")
+                elif h:
+                    timeline_colors.append("#26a69a")
+                else:
+                    timeline_colors.append("#ef5350")
+            fig_tl.add_trace(go.Scatter(
+                x=df_res["date"], y=[1] * len(df_res),
+                mode="markers",
+                marker=dict(
+                    color=timeline_colors, size=6, symbol="square",
+                ),
+                name="绿=命中, 红=未命中, 灰=中性",
+                customdata=[
+                    f"{d.strftime('%Y-%m-%d')}<br>{'中性' if n else ('✓ 命中' if h else '✗ 未命中')}<br>预测: {p*100:+.2f}% 实际: {a*100:+.2f}%"
+                    for d, h, n, p, a in zip(df_res["date"], df_res["hit"], df_res["neutral"],
+                                              df_res["pred_return"], df_res["actual_return"])
+                ],
+                hovertemplate="%{customdata}<extra></extra>",
+            ))
+            fig_tl.update_layout(
+                title="命中/未命中时间线 (每个方块 = 一次预测, 灰=中性已排除)",
+                height=120, yaxis=dict(showticklabels=False, range=[0.5, 1.5]),
+                margin=dict(l=20, r=20, t=30, b=20),
+            )
+            _plotly_chart(fig_tl, height=160)
 
-                    def _eval_trial(win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
-                                    combined_corr, price_vals_t, n_tune, eval_start, eval_end):
-                        results_t = []
-                        # Bug A+B fix: ensemble 模式下 horizon 固定为 10, 评估用 5
-                        la_eff = 10 if ensemble_mode else la
-                        la_eval = 5 if ensemble_mode else la
-                        s_start = max(eval_start, win * 2)
-                        s_end = min(eval_end, n_tune - la_eff)
-                        # 择时过滤阈值
-                        vol_thresh_t = None
-                        if timing_filter:
-                            vt_data = df_factors["vol20d"].reindex(valid_tune.index).fillna(0)
-                            vol_thresh_t = np.percentile(vt_data[vt_data > 0], 80)
-                        lheads_t = _bt_lookaheads(la, ensemble_mode)
-                        for t in range(s_start, s_end):
-                            # 择时过滤
-                            if timing_filter and vol_thresh_t is not None:
-                                if vt_data.iloc[t] > vol_thresh_t:
-                                    continue
-                            tpl_idx = t - win
-                            hist_end = tpl_idx - win
-                            if hist_end >= 0:
-                                row = combined_corr[tpl_idx, :hist_end + 1]
-                                loose_mask = (row + 1) / 2 >= 0.65
-                                if loose_mask.any():
-                                    if bt_algo in ("dtw", "pearson_dtw"):
-                                        dtw_scores = []
-                                        for mi in np.where(loose_mask)[0]:
-                                            dtw_sim = 0.0
-                                            for f in bt_factors:
-                                                tpl_v = vals_dict_t[f][t - win:t]
-                                                win_v = vals_dict_t[f][mi:mi + win]
-                                                s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
-                                                if not np.isnan(s):
-                                                    dtw_sim += s
-                                            dtw_sim /= len(bt_factors)
-                                            if dtw_sim >= th:
-                                                dtw_scores.append((mi, dtw_sim))
-                                        if dtw_scores:
-                                            dtw_scores.sort(key=lambda x: -x[1])
-                                            top_k_idx = [x[0] for x in dtw_scores[:tk]]
-                                        else:
-                                            continue
-                                    else:
-                                        row_sim = (row + 1) / 2
-                                        match_idx = np.where(row_sim >= th)[0]
-                                        top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
+            # 月度命中率 (仅有效信号)
+            if len(df_signal) > 0:
+                df_sig_sorted["month"] = df_sig_sorted["date"].dt.to_period("M")
+                monthly = df_sig_sorted.groupby("month").agg(
+                    信号数=("hit", "count"),
+                    命中=("hit", "sum"),
+                )
+                monthly["命中率"] = (monthly["命中"] / monthly["信号数"] * 100).round(1)
+                monthly.index = monthly.index.astype(str)
 
-                                    pred_by_la = [[] for _ in lheads_t]
-                                    for s_idx in top_k_idx:
-                                        s_end_pos = s_idx + win - 1
-                                        for li, lh in enumerate(lheads_t):
-                                            if s_end_pos + 1 + lh <= n_tune:
-                                                pred_by_la[li].append(
-                                                    (price_vals_t[s_end_pos + lh] - price_vals_t[s_end_pos + 1])
-                                                    / price_vals_t[s_end_pos + 1]
-                                                )
-                                    pred_by_la = [pr for pr in pred_by_la if pr]
-                                    if pred_by_la:
-                                        if ensemble_mode:
-                                            direction = _ensemble_dir(pred_by_la)
-                                            mid_li = len(lheads_t) // 2
-                                            avg_pred = np.mean(pred_by_la[mid_li]) if pred_by_la[mid_li] else 0
-                                        else:
-                                            avg_pred = np.mean(pred_by_la[0])
-                                        act_ret = (price_vals_t[t + la_eval - 1] - price_vals_t[t]) / price_vals_t[t]
-                                        if ensemble_mode:
-                                            hit = (direction == 1 and act_ret > 0) or (direction == -1 and act_ret < 0) or (direction == 0 and abs(act_ret) < 0.001)
-                                            neutral = (direction == 0)
-                                        elif abs(avg_pred) < 0.001:
-                                            hit, neutral = False, True
-                                        else:
-                                            hit = (avg_pred > 0 and act_ret > 0) or \
-                                                  (avg_pred < 0 and act_ret < 0)
-                                            neutral = False
-                                        results_t.append({
-                                            "pred_return": avg_pred,
-                                            "actual_return": act_ret,
-                                            "hit": hit,
-                                            "neutral": neutral,
-                                        })
-                        return results_t
+                fig_monthly = go.Figure()
+                fig_monthly.add_trace(go.Bar(
+                    x=monthly.index, y=monthly["信号数"],
+                    name="信号数", marker_color="rgba(128,128,128,0.3)", yaxis="y",
+                ))
+                fig_monthly.add_trace(go.Scatter(
+                    x=monthly.index, y=monthly["命中率"],
+                    name="命中率%", mode="lines+markers",
+                    line=dict(color="#1f77b4", width=2), yaxis="y2",
+                ))
+                min_x = monthly.index[0] if len(monthly) > 0 else ""
+                max_x = monthly.index[-1] if len(monthly) > 0 else ""
+                fig_monthly.add_shape(type="line", x0=min_x, x1=max_x, y0=50, y1=50,
+                                      line=dict(dash="dot", color="gray", width=1), yref="y2")
+                fig_monthly.update_layout(
+                    title="逐月命中率 (排除中性日)",
+                    yaxis=dict(title="信号数", side="left"),
+                    yaxis2=dict(title="命中率%", overlaying="y", side="right", range=[0, 100]),
+                    height=300,
+                    legend=dict(x=0.01, y=0.99),
+                )
+                _plotly_chart(fig_monthly, height=350)
 
-                    def _compute_metrics(results):
-                        if not results:
-                            return None
-                        df = pd.DataFrame(results)
-                        sig = df[~df["neutral"]]
-                        if len(sig) == 0:
-                            return None
-                        sig["pred_sign"] = np.sign(sig["pred_return"])
-                        sig["seg"] = (sig["pred_sign"] != sig["pred_sign"].shift(1)).cumsum()
-                        segs = sig.groupby("seg")
-                        seg_total = len(segs)
-                        seg_hit = sum(1 for _, g in segs if g["hit"].sum() > len(g) / 2)
-                        return {
-                            "信号段数": seg_total,
-                            "命中段数": seg_hit,
-                            "段命中率%": round(seg_hit / seg_total * 100, 1) if seg_total > 0 else 0,
-                            "原始命中率%": round(sig["hit"].sum() / len(sig) * 100, 1),
-                            "有效信号日": len(sig),
-                            "中性日": int(df["neutral"].sum()),
-                        }
+                # 如果数据足够, 加滚动命中率
+                if len(df_sig_sorted) >= 30:
+                    df_sig_sorted["rolling_hit"] = df_sig_sorted["hit"].rolling(30, min_periods=10).mean() * 100
+                    fig_roll = go.Figure()
+                    fig_roll.add_trace(go.Scatter(
+                        x=df_sig_sorted["date"], y=df_sig_sorted["rolling_hit"],
+                        mode="lines", name="30日滚动命中率%",
+                        line=dict(color="#1f77b4", width=2),
+                        fill="tozeroy", fillcolor="rgba(31,119,180,0.1)",
+                    ))
+                    fig_roll.add_hline(y=50, line_dash="dot", line_color="gray")
+                    fig_roll.update_layout(title="30 日滚动命中率 (排除中性日)", height=250)
+                    _plotly_chart(fig_roll, height=300)
 
-                    tune_train_results = []
-                    tune_progress = st.progress(0)
-                    trial_idx = 0
+            # 详细结果表格
+            st.subheader("最近 30 次预测")
+            recent = df_res.tail(30).sort_values("date", ascending=False)
+            display = recent[["date", "top_r", "pred_return", "actual_return", "hit", "neutral"]].copy()
+            display["date"] = display["date"].apply(lambda x: x.strftime("%Y-%m-%d"))
+            display["pred_return"] = (display["pred_return"] * 100).round(2)
+            display["actual_return"] = (display["actual_return"] * 100).round(2)
+            display["top_r"] = display["top_r"].round(4)
+            display.columns = ["日期", "最高r", "预测收益%", "实际收益%", "命中", "中性"]
+            st.dataframe(display, width='stretch', hide_index=True)
 
-                    for win in windows:
-                        vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                        combined_corr = np.zeros((n_tune - win + 1, n_tune - win + 1))
-                        for factor in bt_factors:
-                            vals = vals_dict_t[factor]
-                            W = np.lib.stride_tricks.sliding_window_view(vals, win)
-                            mean = W.mean(axis=1, keepdims=True)
-                            std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
-                            Wz = (W - mean) / std
-                            combined_corr += (Wz @ Wz.T) / (win - 1) * (1.0 / len(bt_factors))
 
-                        for la in lookaheads:
-                            for th in thresholds:
-                                for tk in topks:
-                                    results_t = _eval_trial(
-                                        win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
-                                        combined_corr, price_vals_t, n_tune,
-                                        tune_start, train_end,
-                                    )
-                                    metrics = _compute_metrics(results_t)
-                                    if metrics:
-                                        tune_train_results.append({
-                                            "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
-                                            "训练段命中率%": metrics["段命中率%"],
-                                            "训练原始命中率%": metrics["原始命中率%"],
-                                            "训练信号段数": metrics["信号段数"],
-                                            "训练有效日": metrics["有效信号日"],
-                                            "训练中性日": metrics["中性日"],
-                                            "_win": win, "_la": la, "_th": th, "_tk": tk,
-                                        })
-                                    trial_idx += 1
-                                    tune_progress.progress(trial_idx / total_trials)
+            # ===========================================================================
+            # 自动调参 (独立于单次回测)
+        with col_tune:
 
-                    if not tune_train_results:
-                        st.warning("训练集未找到任何有效参数组合")
+        # ===========================================================================
+            if run_tune:
+                if not bt_factors:
+                    st.warning("请选择匹配因子")
+                else:
+                    valid_tune = df_factors[bt_factors].dropna()
+                    n_tune = len(valid_tune)
+                    bt_start_dt_t = pd.Timestamp(bt_start)
+                    bt_end_dt_t = pd.Timestamp(bt_end)
+                    tune_start = valid_tune.index.get_indexer([bt_start_dt_t], method="bfill")[0]
+                    tune_end = valid_tune.index.get_indexer([bt_end_dt_t], method="ffill")[0] + 1
+                    tune_start = max(tune_start, bt_window * 2)
+                    tune_end = min(tune_end, n_tune - 10)
+
+                    if tune_end - tune_start < 60:
+                        st.warning("数据不足 (walk-forward 需要至少 60 个有效回测日)")
                     else:
-                        df_tune_train = pd.DataFrame(tune_train_results)
-                        df_tune_train = df_tune_train.sort_values("训练段命中率%", ascending=False)
+                        windows = [5, 10, 20, 30]
+                        lookaheads = [3, 5, 10, 15]
+                        thresholds = [0.7, 0.8, 0.85, 0.9, 0.95]
+                        topks = [1, 3, 5]
 
-                        # Walk-forward: 对 Top 15 在测试集上评估
-                        st.caption(f"对训练集 Top 15 参数组合在测试集 ({test_days} 天) 上验证...")
-                        test_progress = st.progress(0)
-                        test_rows = []
-                        top_n = min(15, len(df_tune_train))
-                        for ti in range(top_n):
-                            row = df_tune_train.iloc[ti]
-                            win, la, th, tk = int(row["_win"]), int(row["_la"]), row["_th"], int(row["_tk"])
+                        # Walk-forward 切分: 前70%训练, 后30%测试
+                        train_end = tune_start + int((tune_end - tune_start) * 0.7)
+                        test_start = train_end
+                        train_days = train_end - tune_start
+                        test_days = tune_end - test_start
+
+                        total_trials = len(windows) * len(lookaheads) * len(thresholds) * len(topks)
+                        algo_label = {"pearson": "Pearson", "dtw": "DTW", "pearson_dtw": "Pearson+DTW"}.get(bt_algo, bt_algo)
+                        st.caption(f"算法: {algo_label} | Walk-forward: 训练集 {train_days} 天, 测试集 {test_days} 天 | 搜索 {total_trials} 种参数组合...")
+
+                        price_vals_t = df_factors.loc[valid_tune.index, "close"].values
+
+                        def _eval_trial(win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                        combined_corr, price_vals_t, n_tune, eval_start, eval_end):
+                            results_t = []
+                            # Bug A+B fix: ensemble 模式下 horizon 固定为 10, 评估用 5
+                            la_eff = 10 if ensemble_mode else la
+                            la_eval = 5 if ensemble_mode else la
+                            s_start = max(eval_start, win * 2)
+                            s_end = min(eval_end, n_tune - la_eff)
+                            # 择时过滤阈值
+                            vol_thresh_t = None
+                            if timing_filter:
+                                vt_data = df_factors["vol20d"].reindex(valid_tune.index).fillna(0)
+                                vol_thresh_t = np.percentile(vt_data[vt_data > 0], 80)
+                            lheads_t = _bt_lookaheads(la, ensemble_mode)
+                            for t in range(s_start, s_end):
+                                # 择时过滤
+                                if timing_filter and vol_thresh_t is not None:
+                                    if vt_data.iloc[t] > vol_thresh_t:
+                                        continue
+                                tpl_idx = t - win
+                                hist_end = tpl_idx - win
+                                if hist_end >= 0:
+                                    row = combined_corr[tpl_idx, :hist_end + 1]
+                                    loose_mask = (row + 1) / 2 >= 0.65
+                                    if loose_mask.any():
+                                        if bt_algo in ("dtw", "pearson_dtw"):
+                                            dtw_scores = []
+                                            for mi in np.where(loose_mask)[0]:
+                                                dtw_sim = 0.0
+                                                for f in bt_factors:
+                                                    tpl_v = vals_dict_t[f][t - win:t]
+                                                    win_v = vals_dict_t[f][mi:mi + win]
+                                                    s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
+                                                    if not np.isnan(s):
+                                                        dtw_sim += s
+                                                dtw_sim /= len(bt_factors)
+                                                if dtw_sim >= th:
+                                                    dtw_scores.append((mi, dtw_sim))
+                                            if dtw_scores:
+                                                dtw_scores.sort(key=lambda x: -x[1])
+                                                top_k_idx = [x[0] for x in dtw_scores[:tk]]
+                                            else:
+                                                continue
+                                        else:
+                                            row_sim = (row + 1) / 2
+                                            match_idx = np.where(row_sim >= th)[0]
+                                            top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
+
+                                        pred_by_la = [[] for _ in lheads_t]
+                                        for s_idx in top_k_idx:
+                                            s_end_pos = s_idx + win - 1
+                                            for li, lh in enumerate(lheads_t):
+                                                if s_end_pos + 1 + lh <= n_tune:
+                                                    pred_by_la[li].append(
+                                                        (price_vals_t[s_end_pos + lh] - price_vals_t[s_end_pos + 1])
+                                                        / price_vals_t[s_end_pos + 1]
+                                                    )
+                                        pred_by_la = [pr for pr in pred_by_la if pr]
+                                        if pred_by_la:
+                                            if ensemble_mode:
+                                                direction = _ensemble_dir(pred_by_la)
+                                                mid_li = len(lheads_t) // 2
+                                                avg_pred = np.mean(pred_by_la[mid_li]) if pred_by_la[mid_li] else 0
+                                            else:
+                                                avg_pred = np.mean(pred_by_la[0])
+                                            act_ret = (price_vals_t[t + la_eval - 1] - price_vals_t[t]) / price_vals_t[t]
+                                            if ensemble_mode:
+                                                hit = (direction == 1 and act_ret > 0) or (direction == -1 and act_ret < 0) or (direction == 0 and abs(act_ret) < 0.001)
+                                                neutral = (direction == 0)
+                                            elif abs(avg_pred) < 0.001:
+                                                hit, neutral = False, True
+                                            else:
+                                                hit = (avg_pred > 0 and act_ret > 0) or \
+                                                      (avg_pred < 0 and act_ret < 0)
+                                                neutral = False
+                                            results_t.append({
+                                                "pred_return": avg_pred,
+                                                "actual_return": act_ret,
+                                                "hit": hit,
+                                                "neutral": neutral,
+                                            })
+                            return results_t
+
+                        def _compute_metrics(results):
+                            if not results:
+                                return None
+                            df = pd.DataFrame(results)
+                            sig = df[~df["neutral"]]
+                            if len(sig) == 0:
+                                return None
+                            sig["pred_sign"] = np.sign(sig["pred_return"])
+                            sig["seg"] = (sig["pred_sign"] != sig["pred_sign"].shift(1)).cumsum()
+                            segs = sig.groupby("seg")
+                            seg_total = len(segs)
+                            seg_hit = sum(1 for _, g in segs if g["hit"].sum() > len(g) / 2)
+                            return {
+                                "信号段数": seg_total,
+                                "命中段数": seg_hit,
+                                "段命中率%": round(seg_hit / seg_total * 100, 1) if seg_total > 0 else 0,
+                                "原始命中率%": round(sig["hit"].sum() / len(sig) * 100, 1),
+                                "有效信号日": len(sig),
+                                "中性日": int(df["neutral"].sum()),
+                            }
+
+                        tune_train_results = []
+                        tune_progress = st.progress(0)
+                        trial_idx = 0
+
+                        for win in windows:
                             vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
                             combined_corr = np.zeros((n_tune - win + 1, n_tune - win + 1))
                             for factor in bt_factors:
@@ -1745,44 +1703,90 @@ if tab_idx == 7:
                                 std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
                                 Wz = (W - mean) / std
                                 combined_corr += (Wz @ Wz.T) / (win - 1) * (1.0 / len(bt_factors))
-                            results_t = _eval_trial(
-                                win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
-                                combined_corr, price_vals_t, n_tune,
-                                test_start, tune_end,
-                            )
-                            metrics = _compute_metrics(results_t)
-                            if metrics:
-                                test_rows.append({
-                                    "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
-                                    "训练段命中率%": row["训练段命中率%"],
-                                    "测试段命中率%": metrics["段命中率%"],
-                                    "测试段数": metrics["信号段数"],
-                                    "训练原始命中率%": row["训练原始命中率%"],
-                                    "测试原始命中率%": metrics["原始命中率%"],
-                                    "测试有效日": metrics["有效信号日"],
-                                    "测试中性日": metrics["中性日"],
-                                })
-                            test_progress.progress((ti + 1) / top_n)
 
-                        if test_rows:
-                            df_final = pd.DataFrame(test_rows)
-                            df_final = df_final.sort_values("测试段命中率%", ascending=False)
+                            for la in lookaheads:
+                                for th in thresholds:
+                                    for tk in topks:
+                                        results_t = _eval_trial(
+                                            win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                            combined_corr, price_vals_t, n_tune,
+                                            tune_start, train_end,
+                                        )
+                                        metrics = _compute_metrics(results_t)
+                                        if metrics:
+                                            tune_train_results.append({
+                                                "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
+                                                "训练段命中率%": metrics["段命中率%"],
+                                                "训练原始命中率%": metrics["原始命中率%"],
+                                                "训练信号段数": metrics["信号段数"],
+                                                "训练有效日": metrics["有效信号日"],
+                                                "训练中性日": metrics["中性日"],
+                                                "_win": win, "_la": la, "_th": th, "_tk": tk,
+                                            })
+                                        trial_idx += 1
+                                        tune_progress.progress(trial_idx / total_trials)
 
-                            st.subheader(f"🏆 Walk-forward 最优参数 Top 15")
-                            st.caption(f"参数搜索于训练集, 打分排序于测试集 (out-of-sample)")
-                            st.dataframe(
-                                df_final.head(15),
-                                width='stretch',
-                                hide_index=True,
-                                column_config={
-                                    "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                    "测试段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                    "训练原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                    "测试原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                }
-                            )
+                        if not tune_train_results:
+                            st.warning("训练集未找到任何有效参数组合")
                         else:
-                            st.warning("测试集未找到任何有效参数组合")
+                            df_tune_train = pd.DataFrame(tune_train_results)
+                            df_tune_train = df_tune_train.sort_values("训练段命中率%", ascending=False)
+
+                            # Walk-forward: 对 Top 15 在测试集上评估
+                            st.caption(f"对训练集 Top 15 参数组合在测试集 ({test_days} 天) 上验证...")
+                            test_progress = st.progress(0)
+                            test_rows = []
+                            top_n = min(15, len(df_tune_train))
+                            for ti in range(top_n):
+                                row = df_tune_train.iloc[ti]
+                                win, la, th, tk = int(row["_win"]), int(row["_la"]), row["_th"], int(row["_tk"])
+                                vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
+                                combined_corr = np.zeros((n_tune - win + 1, n_tune - win + 1))
+                                for factor in bt_factors:
+                                    vals = vals_dict_t[factor]
+                                    W = np.lib.stride_tricks.sliding_window_view(vals, win)
+                                    mean = W.mean(axis=1, keepdims=True)
+                                    std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
+                                    Wz = (W - mean) / std
+                                    combined_corr += (Wz @ Wz.T) / (win - 1) * (1.0 / len(bt_factors))
+                                results_t = _eval_trial(
+                                    win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                    combined_corr, price_vals_t, n_tune,
+                                    test_start, tune_end,
+                                )
+                                metrics = _compute_metrics(results_t)
+                                if metrics:
+                                    test_rows.append({
+                                        "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
+                                        "训练段命中率%": row["训练段命中率%"],
+                                        "测试段命中率%": metrics["段命中率%"],
+                                        "测试段数": metrics["信号段数"],
+                                        "训练原始命中率%": row["训练原始命中率%"],
+                                        "测试原始命中率%": metrics["原始命中率%"],
+                                        "测试有效日": metrics["有效信号日"],
+                                        "测试中性日": metrics["中性日"],
+                                    })
+                                test_progress.progress((ti + 1) / top_n)
+
+                            if test_rows:
+                                df_final = pd.DataFrame(test_rows)
+                                df_final = df_final.sort_values("测试段命中率%", ascending=False)
+
+                                st.subheader(f"🏆 Walk-forward 最优参数 Top 15")
+                                st.caption(f"参数搜索于训练集, 打分排序于测试集 (out-of-sample)")
+                                st.dataframe(
+                                    df_final.head(15),
+                                    width='stretch',
+                                    hide_index=True,
+                                    column_config={
+                                        "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "测试段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "训练原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "测试原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                    }
+                                )
+                            else:
+                                st.warning("测试集未找到任何有效参数组合")
 # Tab 8: 数据表格
 # ===========================================================================
 if tab_idx == 8:
