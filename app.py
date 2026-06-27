@@ -1269,10 +1269,10 @@ if tab_idx == 7:
             st.info("测试集无有效信号, 训练集有结果但不在测试集复现 — 可能过拟合了")
 
     if "bt_results" in st.session_state and st.session_state.bt_results is not None:
-    with st.expander("📊 回测结果 (点击展开)", expanded=True):
+        with st.expander("📊 回测结果 (点击展开)", expanded=True):
             df_res = pd.DataFrame(st.session_state.bt_results)
             if "neutral" not in df_res.columns:
-                df_res["neutral"] = False
+            df_res["neutral"] = False
             neutral_count = int(df_res["neutral"].sum())
 
             df_signal = df_res[~df_res["neutral"]]
@@ -1282,176 +1282,176 @@ if tab_idx == 7:
 
             # Walk-forward 训练/测试对比
             has_train = ("bt_train_results" in st.session_state and
-                         st.session_state.bt_train_results is not None)
+            st.session_state.bt_train_results is not None)
             if has_train:
-                df_train = pd.DataFrame(st.session_state.bt_train_results)
-                if "neutral" not in df_train.columns:
-                    df_train["neutral"] = False
-                df_train_sig = df_train[~df_train["neutral"]]
-                train_total = len(df_train_sig)
-                train_hits = int(df_train_sig["hit"].sum()) if train_total > 0 else 0
-                train_rate = train_hits / train_total * 100 if train_total > 0 else 0
-                train_neutral = int(df_train["neutral"].sum())
-                train_n_total = train_total + train_neutral
+            df_train = pd.DataFrame(st.session_state.bt_train_results)
+            if "neutral" not in df_train.columns:
+            df_train["neutral"] = False
+            df_train_sig = df_train[~df_train["neutral"]]
+            train_total = len(df_train_sig)
+            train_hits = int(df_train_sig["hit"].sum()) if train_total > 0 else 0
+            train_rate = train_hits / train_total * 100 if train_total > 0 else 0
+            train_neutral = int(df_train["neutral"].sum())
+            train_n_total = train_total + train_neutral
 
-                # 第一行: 训练集
-                c1, c2, c3, c4 = st.columns(4)
-                with c1:
-                    st.metric("训练集 有效信号日", train_total)
-                with c2:
-                    st.metric("训练集 命中次数", train_hits)
-                with c3:
-                    st.metric("训练集 命中率", f"{train_rate:.1f}%")
-                with c4:
-                    st.metric("训练集 中性日", train_neutral,
-                              delta=f"{(train_neutral / train_n_total * 100):.0f}%" if train_n_total > 0 else None)
+            # 第一行: 训练集
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+            st.metric("训练集 有效信号日", train_total)
+            with c2:
+            st.metric("训练集 命中次数", train_hits)
+            with c3:
+            st.metric("训练集 命中率", f"{train_rate:.1f}%")
+            with c4:
+            st.metric("训练集 中性日", train_neutral,
+            delta=f"{(train_neutral / train_n_total * 100):.0f}%" if train_n_total > 0 else None)
 
-                # 第二行: 测试集
-                n_total = total + neutral_count
-                c1, c2, c3, c4 = st.columns(4)
-                with c1:
-                    st.metric("测试集 有效信号日", total)
-                with c2:
-                    st.metric("测试集 命中次数", hits)
-                with c3:
-                    st.metric("测试集 命中率", f"{hit_rate:.1f}%",
-                              delta=f"{hit_rate - train_rate:+.1f}% vs 训练")
-                with c4:
-                    st.metric("测试集 中性日", neutral_count,
-                              delta=f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
-                              help="预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算")
+            # 第二行: 测试集
+            n_total = total + neutral_count
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+            st.metric("测试集 有效信号日", total)
+            with c2:
+            st.metric("测试集 命中次数", hits)
+            with c3:
+            st.metric("测试集 命中率", f"{hit_rate:.1f}%",
+            delta=f"{hit_rate - train_rate:+.1f}% vs 训练")
+            with c4:
+            st.metric("测试集 中性日", neutral_count,
+            delta=f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
+            help="预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算")
             else:
-                # 无 walk-forward: 一行
-                mc1, mc2, mc3, mc4 = st.columns(4)
-                with mc1:
-                    st.metric("有效信号日", total, help="排除预测方向不明确的中性日")
-                with mc2:
-                    st.metric("命中次数", hits)
-                with mc3:
-                    st.metric("方向命中率", f"{hit_rate:.1f}%")
-                with mc4:
-                    n_total = total + neutral_count
-                    st.metric("中性日 (已排除)", neutral_count,
-                              delta=f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
-                              help="预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算")
+            # 无 walk-forward: 一行
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            with mc1:
+            st.metric("有效信号日", total, help="排除预测方向不明确的中性日")
+            with mc2:
+            st.metric("命中次数", hits)
+            with mc3:
+            st.metric("方向命中率", f"{hit_rate:.1f}%")
+            with mc4:
+            n_total = total + neutral_count
+            st.metric("中性日 (已排除)", neutral_count,
+            delta=f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
+            help="预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算")
 
             # ---- 去重叠统计 ----
             if len(df_signal) > 0:
-                df_sig_sorted = df_signal.sort_values("date")
-                df_sig_sorted["pred_sign"] = np.sign(df_sig_sorted["pred_return"].fillna(0))
-                df_sig_sorted["segment"] = (df_sig_sorted["pred_sign"] != df_sig_sorted["pred_sign"].shift(1)).cumsum()
-                segments = df_sig_sorted.groupby("segment").agg(
-                    起始日期=("date", "first"),
-                    结束日期=("date", "last"),
-                    持续天数=("date", "count"),
-                    预测方向=("pred_sign", "first"),
-                    命中天数=("hit", "sum"),
-                    平均预测收益=("pred_return", "mean"),
-                    平均实际收益=("actual_return", "mean"),
-                )
-                segments["预测方向"] = segments["预测方向"].map({1: "看涨", -1: "看跌"})
-                seg_total = len(segments)
-                seg_hits = (segments["命中天数"] > segments["持续天数"] / 2).sum()
-                seg_hitrate = seg_hits / seg_total * 100 if seg_total > 0 else 0
+            df_sig_sorted = df_signal.sort_values("date")
+            df_sig_sorted["pred_sign"] = np.sign(df_sig_sorted["pred_return"].fillna(0))
+            df_sig_sorted["segment"] = (df_sig_sorted["pred_sign"] != df_sig_sorted["pred_sign"].shift(1)).cumsum()
+            segments = df_sig_sorted.groupby("segment").agg(
+            起始日期=("date", "first"),
+            结束日期=("date", "last"),
+            持续天数=("date", "count"),
+            预测方向=("pred_sign", "first"),
+            命中天数=("hit", "sum"),
+            平均预测收益=("pred_return", "mean"),
+            平均实际收益=("actual_return", "mean"),
+            )
+            segments["预测方向"] = segments["预测方向"].map({1: "看涨", -1: "看跌"})
+            seg_total = len(segments)
+            seg_hits = (segments["命中天数"] > segments["持续天数"] / 2).sum()
+            seg_hitrate = seg_hits / seg_total * 100 if seg_total > 0 else 0
             else:
-                seg_total = 0
-                seg_hits = 0
-                seg_hitrate = 0
-                segments = pd.DataFrame()
-                df_sig_sorted = df_signal
+            seg_total = 0
+            seg_hits = 0
+            seg_hitrate = 0
+            segments = pd.DataFrame()
+            df_sig_sorted = df_signal
 
             st.divider()
             st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段 (中性日已排除), 段内过半命中才算正确")
             if has_train and len(df_train_sig) > 0:
-                df_train_sig_sorted = df_train_sig.sort_values("date")
-                df_train_sig_sorted["pred_sign"] = np.sign(df_train_sig_sorted["pred_return"])
-                df_train_sig_sorted["segment"] = (df_train_sig_sorted["pred_sign"] != df_train_sig_sorted["pred_sign"].shift(1)).cumsum()
-                train_segs = df_train_sig_sorted.groupby("segment")
-                train_seg_total = len(train_segs)
-                train_seg_hits = sum(1 for _, g in train_segs if g["hit"].sum() > len(g) / 2)
-                train_seg_rate = train_seg_hits / train_seg_total * 100 if train_seg_total > 0 else 0
-                train_seg_avg_days = train_segs.agg(days=("date", "count"))["days"].mean() if train_seg_total > 0 else 0
+            df_train_sig_sorted = df_train_sig.sort_values("date")
+            df_train_sig_sorted["pred_sign"] = np.sign(df_train_sig_sorted["pred_return"])
+            df_train_sig_sorted["segment"] = (df_train_sig_sorted["pred_sign"] != df_train_sig_sorted["pred_sign"].shift(1)).cumsum()
+            train_segs = df_train_sig_sorted.groupby("segment")
+            train_seg_total = len(train_segs)
+            train_seg_hits = sum(1 for _, g in train_segs if g["hit"].sum() > len(g) / 2)
+            train_seg_rate = train_seg_hits / train_seg_total * 100 if train_seg_total > 0 else 0
+            train_seg_avg_days = train_segs.agg(days=("date", "count"))["days"].mean() if train_seg_total > 0 else 0
 
-                test_seg_avg_days = segments["持续天数"].mean() if seg_total > 0 else 0
+            test_seg_avg_days = segments["持续天数"].mean() if seg_total > 0 else 0
 
-                # 第一行: 训练段
-                c1, c2, c3, c4 = st.columns(4)
-                with c1:
-                    st.metric("训练段命中率", f"{train_seg_rate:.1f}%")
-                with c2:
-                    st.metric("训练信号段数", train_seg_total)
-                with c3:
-                    st.metric("训练命中段数", train_seg_hits)
-                with c4:
-                    st.metric("训练段均天数", f"{train_seg_avg_days:.1f}")
+            # 第一行: 训练段
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+            st.metric("训练段命中率", f"{train_seg_rate:.1f}%")
+            with c2:
+            st.metric("训练信号段数", train_seg_total)
+            with c3:
+            st.metric("训练命中段数", train_seg_hits)
+            with c4:
+            st.metric("训练段均天数", f"{train_seg_avg_days:.1f}")
 
-                # 第二行: 测试段
-                c1, c2, c3, c4 = st.columns(4)
-                with c1:
-                    st.metric("测试段命中率", f"{seg_hitrate:.1f}%",
-                              delta=f"{seg_hitrate - train_seg_rate:+.1f}% vs 训练")
-                with c2:
-                    st.metric("测试信号段数", seg_total)
-                with c3:
-                    st.metric("测试命中段数", seg_hits)
-                with c4:
-                    st.metric("测试段均天数", f"{test_seg_avg_days:.1f}")
+            # 第二行: 测试段
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+            st.metric("测试段命中率", f"{seg_hitrate:.1f}%",
+            delta=f"{seg_hitrate - train_seg_rate:+.1f}% vs 训练")
+            with c2:
+            st.metric("测试信号段数", seg_total)
+            with c3:
+            st.metric("测试命中段数", seg_hits)
+            with c4:
+            st.metric("测试段均天数", f"{test_seg_avg_days:.1f}")
             else:
-                sc1, sc2, sc3, sc4 = st.columns(4)
-                with sc1:
-                    st.metric("信号段数", seg_total)
-                with sc2:
-                    st.metric("命中段数", seg_hits)
-                with sc3:
-                    st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
-                              delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始" if total > 0 else None)
-                with sc4:
-                    st.metric("段均天数", f"{segments['持续天数'].mean():.1f}" if seg_total > 0 else "-")
+            sc1, sc2, sc3, sc4 = st.columns(4)
+            with sc1:
+            st.metric("信号段数", seg_total)
+            with sc2:
+            st.metric("命中段数", seg_hits)
+            with sc3:
+            st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
+            delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始" if total > 0 else None)
+            with sc4:
+            st.metric("段均天数", f"{segments['持续天数'].mean():.1f}" if seg_total > 0 else "-")
 
             # 预测 vs 实际散点图 (全部日, 3色: 绿=命中 红=未命中 灰=中性)
             fig = go.Figure()
             hover_texts = [
-                f"{d.strftime('%Y-%m-%d')}<br>预测: {p*100:+.2f}%<br>实际: {a*100:+.2f}%<br>匹配数: {m}"
-                for d, p, a, m in zip(df_res["date"], df_res["pred_return"],
-                                      df_res["actual_return"], df_res.get("matches", [0] * len(df_res)))
+            f"{d.strftime('%Y-%m-%d')}<br>预测: {p*100:+.2f}%<br>实际: {a*100:+.2f}%<br>匹配数: {m}"
+            for d, p, a, m in zip(df_res["date"], df_res["pred_return"],
+            df_res["actual_return"], df_res.get("matches", [0] * len(df_res)))
             ]
             color_map = []
             for h, n in zip(df_res["hit"], df_res["neutral"]):
-                if n:
-                    color_map.append("#9e9e9e")
-                elif h:
-                    color_map.append("#26a69a")
-                else:
-                    color_map.append("#ef5350")
+            if n:
+            color_map.append("#9e9e9e")
+            elif h:
+            color_map.append("#26a69a")
+            else:
+            color_map.append("#ef5350")
             fig.add_trace(go.Scatter(
-                x=df_res["pred_return"] * 100, y=df_res["actual_return"] * 100,
-                mode="markers",
-                marker=dict(color=color_map, size=7, opacity=0.6),
-                customdata=hover_texts,
-                hovertemplate="%{customdata}<extra></extra>",
-                name="绿=命中 红=未命中 灰=中性",
+            x=df_res["pred_return"] * 100, y=df_res["actual_return"] * 100,
+            mode="markers",
+            marker=dict(color=color_map, size=7, opacity=0.6),
+            customdata=hover_texts,
+            hovertemplate="%{customdata}<extra></extra>",
+            name="绿=命中 红=未命中 灰=中性",
             ))
             fig.add_hline(y=0, line_dash="dot", line_color="gray")
             fig.add_vline(x=0, line_dash="dot", line_color="gray")
             fig.update_layout(
-                title=f"预测 vs 实际 (命中率 {hit_rate:.1f}%, 排除 {neutral_count} 个中性日)",
-                xaxis_title="预测收益率 (%)", yaxis_title="实际收益率 (%)",
-                height=400,
+            title=f"预测 vs 实际 (命中率 {hit_rate:.1f}%, 排除 {neutral_count} 个中性日)",
+            xaxis_title="预测收益率 (%)", yaxis_title="实际收益率 (%)",
+            height=400,
             )
             _plotly_chart(fig, height=450)
 
             # 按预测方向分组的统计 (仅有效信号)
             if len(df_signal) > 0:
-                st.subheader("按预测方向分组 (仅有效信号)")
-                df_signal["pred_dir"] = df_signal["pred_return"].apply(
-                    lambda x: "看涨" if x > 0.001 else "看跌"
-                )
-                dir_stats = df_signal.groupby("pred_dir").agg(
-                    次数=("hit", "count"),
-                    命中率=("hit", lambda x: x.sum() / len(x) * 100),
-                    平均实际收益=("actual_return", lambda x: np.mean(x) * 100),
-                ).round(1)
-                st.dataframe(dir_stats, width='stretch')
+            st.subheader("按预测方向分组 (仅有效信号)")
+            df_signal["pred_dir"] = df_signal["pred_return"].apply(
+            lambda x: "看涨" if x > 0.001 else "看跌"
+            )
+            dir_stats = df_signal.groupby("pred_dir").agg(
+            次数=("hit", "count"),
+            命中率=("hit", lambda x: x.sum() / len(x) * 100),
+            平均实际收益=("actual_return", lambda x: np.mean(x) * 100),
+            ).round(1)
+            st.dataframe(dir_stats, width='stretch')
 
             # ---- 时间分布 ----
             st.subheader("命中/未命中 时间分布")
@@ -1460,79 +1460,79 @@ if tab_idx == 7:
             fig_tl = go.Figure()
             timeline_colors = []
             for h, n in zip(df_res["hit"], df_res["neutral"]):
-                if n:
-                    timeline_colors.append("#9e9e9e")
-                elif h:
-                    timeline_colors.append("#26a69a")
-                else:
-                    timeline_colors.append("#ef5350")
+            if n:
+            timeline_colors.append("#9e9e9e")
+            elif h:
+            timeline_colors.append("#26a69a")
+            else:
+            timeline_colors.append("#ef5350")
             fig_tl.add_trace(go.Scatter(
-                x=df_res["date"], y=[1] * len(df_res),
-                mode="markers",
-                marker=dict(
-                    color=timeline_colors, size=6, symbol="square",
-                ),
-                name="绿=命中, 红=未命中, 灰=中性",
-                customdata=[
-                    f"{d.strftime('%Y-%m-%d')}<br>{'中性' if n else ('✓ 命中' if h else '✗ 未命中')}<br>预测: {p*100:+.2f}% 实际: {a*100:+.2f}%"
-                    for d, h, n, p, a in zip(df_res["date"], df_res["hit"], df_res["neutral"],
-                                              df_res["pred_return"], df_res["actual_return"])
-                ],
-                hovertemplate="%{customdata}<extra></extra>",
+            x=df_res["date"], y=[1] * len(df_res),
+            mode="markers",
+            marker=dict(
+            color=timeline_colors, size=6, symbol="square",
+            ),
+            name="绿=命中, 红=未命中, 灰=中性",
+            customdata=[
+            f"{d.strftime('%Y-%m-%d')}<br>{'中性' if n else ('✓ 命中' if h else '✗ 未命中')}<br>预测: {p*100:+.2f}% 实际: {a*100:+.2f}%"
+            for d, h, n, p, a in zip(df_res["date"], df_res["hit"], df_res["neutral"],
+            df_res["pred_return"], df_res["actual_return"])
+            ],
+            hovertemplate="%{customdata}<extra></extra>",
             ))
             fig_tl.update_layout(
-                title="命中/未命中时间线 (每个方块 = 一次预测, 灰=中性已排除)",
-                height=120, yaxis=dict(showticklabels=False, range=[0.5, 1.5]),
-                margin=dict(l=20, r=20, t=30, b=20),
+            title="命中/未命中时间线 (每个方块 = 一次预测, 灰=中性已排除)",
+            height=120, yaxis=dict(showticklabels=False, range=[0.5, 1.5]),
+            margin=dict(l=20, r=20, t=30, b=20),
             )
             _plotly_chart(fig_tl, height=160)
 
             # 月度命中率 (仅有效信号)
             if len(df_signal) > 0:
-                df_sig_sorted["month"] = df_sig_sorted["date"].dt.to_period("M")
-                monthly = df_sig_sorted.groupby("month").agg(
-                    信号数=("hit", "count"),
-                    命中=("hit", "sum"),
-                )
-                monthly["命中率"] = (monthly["命中"] / monthly["信号数"] * 100).round(1)
-                monthly.index = monthly.index.astype(str)
+            df_sig_sorted["month"] = df_sig_sorted["date"].dt.to_period("M")
+            monthly = df_sig_sorted.groupby("month").agg(
+            信号数=("hit", "count"),
+            命中=("hit", "sum"),
+            )
+            monthly["命中率"] = (monthly["命中"] / monthly["信号数"] * 100).round(1)
+            monthly.index = monthly.index.astype(str)
 
-                fig_monthly = go.Figure()
-                fig_monthly.add_trace(go.Bar(
-                    x=monthly.index, y=monthly["信号数"],
-                    name="信号数", marker_color="rgba(128,128,128,0.3)", yaxis="y",
-                ))
-                fig_monthly.add_trace(go.Scatter(
-                    x=monthly.index, y=monthly["命中率"],
-                    name="命中率%", mode="lines+markers",
-                    line=dict(color="#1f77b4", width=2), yaxis="y2",
-                ))
-                min_x = monthly.index[0] if len(monthly) > 0 else ""
-                max_x = monthly.index[-1] if len(monthly) > 0 else ""
-                fig_monthly.add_shape(type="line", x0=min_x, x1=max_x, y0=50, y1=50,
-                                      line=dict(dash="dot", color="gray", width=1), yref="y2")
-                fig_monthly.update_layout(
-                    title="逐月命中率 (排除中性日)",
-                    yaxis=dict(title="信号数", side="left"),
-                    yaxis2=dict(title="命中率%", overlaying="y", side="right", range=[0, 100]),
-                    height=300,
-                    legend=dict(x=0.01, y=0.99),
-                )
-                _plotly_chart(fig_monthly, height=350)
+            fig_monthly = go.Figure()
+            fig_monthly.add_trace(go.Bar(
+            x=monthly.index, y=monthly["信号数"],
+            name="信号数", marker_color="rgba(128,128,128,0.3)", yaxis="y",
+            ))
+            fig_monthly.add_trace(go.Scatter(
+            x=monthly.index, y=monthly["命中率"],
+            name="命中率%", mode="lines+markers",
+            line=dict(color="#1f77b4", width=2), yaxis="y2",
+            ))
+            min_x = monthly.index[0] if len(monthly) > 0 else ""
+            max_x = monthly.index[-1] if len(monthly) > 0 else ""
+            fig_monthly.add_shape(type="line", x0=min_x, x1=max_x, y0=50, y1=50,
+            line=dict(dash="dot", color="gray", width=1), yref="y2")
+            fig_monthly.update_layout(
+            title="逐月命中率 (排除中性日)",
+            yaxis=dict(title="信号数", side="left"),
+            yaxis2=dict(title="命中率%", overlaying="y", side="right", range=[0, 100]),
+            height=300,
+            legend=dict(x=0.01, y=0.99),
+            )
+            _plotly_chart(fig_monthly, height=350)
 
-                # 如果数据足够, 加滚动命中率
-                if len(df_sig_sorted) >= 30:
-                    df_sig_sorted["rolling_hit"] = df_sig_sorted["hit"].rolling(30, min_periods=10).mean() * 100
-                    fig_roll = go.Figure()
-                    fig_roll.add_trace(go.Scatter(
-                        x=df_sig_sorted["date"], y=df_sig_sorted["rolling_hit"],
-                        mode="lines", name="30日滚动命中率%",
-                        line=dict(color="#1f77b4", width=2),
-                        fill="tozeroy", fillcolor="rgba(31,119,180,0.1)",
-                    ))
-                    fig_roll.add_hline(y=50, line_dash="dot", line_color="gray")
-                    fig_roll.update_layout(title="30 日滚动命中率 (排除中性日)", height=250)
-                    _plotly_chart(fig_roll, height=300)
+            # 如果数据足够, 加滚动命中率
+            if len(df_sig_sorted) >= 30:
+            df_sig_sorted["rolling_hit"] = df_sig_sorted["hit"].rolling(30, min_periods=10).mean() * 100
+            fig_roll = go.Figure()
+            fig_roll.add_trace(go.Scatter(
+            x=df_sig_sorted["date"], y=df_sig_sorted["rolling_hit"],
+            mode="lines", name="30日滚动命中率%",
+            line=dict(color="#1f77b4", width=2),
+            fill="tozeroy", fillcolor="rgba(31,119,180,0.1)",
+            ))
+            fig_roll.add_hline(y=50, line_dash="dot", line_color="gray")
+            fig_roll.update_layout(title="30 日滚动命中率 (排除中性日)", height=250)
+            _plotly_chart(fig_roll, height=300)
 
             # 详细结果表格
             st.subheader("最近 30 次预测")
