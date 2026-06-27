@@ -277,21 +277,22 @@ def _ensemble_dir(pred_rets_by_la):
     return 0
 
 
-def _pearson_corr_matrix(value_arrays, win):
-    """多因子滑动窗口 Pearson 相关矩阵 (各因子等权平均)。
-
+def _pearson_corr_matrix(value_arrays, win, weights=None):
+    """多因子滑动窗口 Pearson 相关矩阵 (加权平均)。
     value_arrays: list of 1D np.ndarray, 每个因子一条序列。
-    返回 shape (n_win, n_win) 的相关系数矩阵。
+    weights: 各因子权重, 默认等权。
     """
     n_win = len(value_arrays[0]) - win + 1
+    if weights is None:
+        weights = [1.0 / len(value_arrays)] * len(value_arrays)
     mat = np.zeros((n_win, n_win))
-    for vals in value_arrays:
+    for vals, w in zip(value_arrays, weights):
         W = np.lib.stride_tricks.sliding_window_view(vals, win)
         mean = W.mean(axis=1, keepdims=True)
         std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
         Wz = (W - mean) / std
-        mat += (Wz @ Wz.T) / (win - 1)
-    mat /= len(value_arrays)
+        mat += w * (Wz @ Wz.T) / (win - 1)
+    return mat
     return mat
 
 
