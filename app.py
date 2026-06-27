@@ -259,7 +259,7 @@ def _plotly_chart(fig, height=400):
     )
     fig.update_xaxes(gridcolor="rgba(128,128,128,0.1)")
     fig.update_yaxes(gridcolor="rgba(128,128,128,0.1)")
-    st.plotly_chart(fig, width='stretch')
+    st.plotly_chart(fig)
 
 
 # ===========================================================================
@@ -862,7 +862,7 @@ if tab_idx == 6:
                             )
                             sub_fig.update_xaxes(gridcolor="rgba(128,128,128,0.1)")
                             sub_fig.update_yaxes(gridcolor="rgba(128,128,128,0.1)")
-                            st.plotly_chart(sub_fig, width='stretch')
+                            st.plotly_chart(sub_fig)
 
                 # ---- 汇总预测图 (基于第一个因子) ----
                 if lookahead > 0:
