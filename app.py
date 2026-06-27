@@ -1776,6 +1776,7 @@ if tab_idx == 7:
                         if test_rows:
                             df_final = pd.DataFrame(test_rows)
                             df_final = df_final.sort_values("测试段命中率%", ascending=False)
+                            st.session_state.tune_df = df_final  # 用含测试集的结果覆盖
 
                             st.subheader(f"🏆 Walk-forward 最优参数 Top 15")
                             st.caption(f"参数搜索于训练集, 打分排序于测试集 (out-of-sample)")
