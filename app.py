@@ -1095,18 +1095,28 @@ if tab_idx == 7:
                                     match_scores = row[match_indices]
                                     top_k_idx = match_indices[np.argsort(-match_scores)[:bt_topk]]
                                     top_scores = row[top_k_idx]
-                                    pred_returns = []
+                                    lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
+                                    pred_by_la = [[] for _ in lheads]
                                     for s_idx in top_k_idx:
                                         s_end = s_idx + win - 1
-                                        if s_end + 1 + bt_lookahead <= n:
-                                            pred_returns.append(
-                                                (price_vals[s_end + bt_lookahead] - price_vals[s_end + 1])
-                                                / price_vals[s_end + 1]
-                                            )
-                                    if pred_returns:
-                                        avg_pred = np.mean(pred_returns)
+                                        for li, la in enumerate(lheads):
+                                            if s_end + 1 + la <= n:
+                                                r = (price_vals[s_end + la] - price_vals[s_end + 1]) / price_vals[s_end + 1]
+                                                pred_by_la[li].append(r)
+                                    # 过滤空的
+                                    pred_by_la = [pr for pr in pred_by_la if pr]
+                                    if pred_by_la:
+                                        if ensemble_mode:
+                                            direction = _ensemble_dir(pred_by_la)
+                                            mid_la_idx = len(lheads) // 2
+                                            avg_pred = np.mean(pred_by_la[mid_la_idx]) if pred_by_la[mid_la_idx] else 0
+                                        else:
+                                            avg_pred = np.mean(pred_by_la[0])
                                         actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
-                                        if abs(avg_pred) < 0.001:
+                                        if ensemble_mode:
+                                            hit = (direction == 1 and actual_return > 0) or (direction == -1 and actual_return < 0) or (direction == 0 and abs(actual_return) < 0.001)
+                                            neutral = (direction == 0)
+                                        elif abs(avg_pred) < 0.001:
                                             hit, neutral = False, True
                                         else:
                                             hit = (avg_pred > 0 and actual_return > 0) or \
