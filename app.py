@@ -1177,7 +1177,6 @@ if tab_idx == 7:
 # ---- 回测结果展示 (从缓存读取, 参数变动不清空) ----
 if "bt_results" in st.session_state and st.session_state.bt_results is not None:
     df_res = pd.DataFrame(st.session_state.bt_results)
-    df_res = pd.DataFrame(results)
     total = len(df_res)
     hits = df_res["hit"].sum()
     hit_rate = hits / total * 100
