@@ -1960,8 +1960,8 @@ if tab_idx == 7:
                                 break
                             params = trial.params
                             win, la, th, tk = params["win"], params["la"], params["th"], params["tk"]
-                            # 去重 key: (窗口, 预测, TopK), 阈值四舍五入到 0.05
-                            dedup_key = (win, la, tk, round(th * 20) / 20)
+                            # 去重 key: 只按 (窗口, 预测天) 保证策略多样性
+                            dedup_key = (win, la)
                             if dedup_key in seen_keys:
                                 continue
                             seen_keys.add(dedup_key)
