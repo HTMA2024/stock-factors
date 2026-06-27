@@ -2058,8 +2058,9 @@ if tab_idx == 7:
                             for ti in range(top_n_test):
                                 vrow = df_valid.iloc[ti]
                                 win, la, th, tk = int(vrow["_win"]), int(vrow["_la"]), vrow["_th"], int(vrow["_tk"])
+                                w_list = vrow.get("_weights", bt_weight_list)
                                 vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                                combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
+                                combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, w_list)
                                 results_t = _eval_trial(
                                     win, la, th, tk, bt_algo, bt_factors,
                                     vals_dict_t, combined_corr, price_vals_t, n_tune,
