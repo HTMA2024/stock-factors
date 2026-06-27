@@ -1567,8 +1567,10 @@ if tab_idx == 7:
                         st.caption(f"对训练集 Top 15 参数组合在测试集 ({test_days} 天) 上验证...")
                         test_progress = st.progress(0)
                         test_rows = []
-                        for ti, combo in enumerate(df_tune_train.head(15).itertuples()):
-                            win, la, th, tk = combo._win, combo._la, combo._th, combo._tk
+                        top_n = min(15, len(df_tune_train))
+                        for ti in range(top_n):
+                            row = df_tune_train.iloc[ti]
+                            win, la, th, tk = int(row["_win"]), int(row["_la"]), row["_th"], int(row["_tk"])
                             vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
                             combined_corr = np.zeros((n_tune - win + 1, n_tune - win + 1))
                             for factor in bt_factors:
