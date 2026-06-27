@@ -965,7 +965,7 @@ if tab_idx == 7:
 
     # ---- 选项 ----
     st.caption("算法与日期")
-    d1, d2, d3 = st.columns(3)
+    d1, d2, d3, d4 = st.columns(4)
     with d1:
         bt_algo = st.radio("匹配算法", ["pearson", "dtw", "pearson_dtw"], horizontal=True, key="bt_algo",
                            format_func=lambda x: {"pearson": "Pearson", "dtw": "DTW", "pearson_dtw": "Pearson+DTW"}.get(x, x),
