@@ -333,7 +333,7 @@ def _classify_hit(direction, avg_pred, actual_return, ensemble, ensemble_neutral
 
 
 def _segment_stats(df_signal):
-    """信号段去重统计: 连续同向预测合并为段, 段内过半命中才算命中。
+    """信号段去重统计: 连续同向预测合并为段, 仅以段首日命中判断整段是否正确。
 
     df_signal: 含 pred_return / hit 列 (已排除中性日)。若含 date 列则按 date 排序,
     否则按现有行序 (调用方需保证为时间序)。
@@ -346,7 +346,7 @@ def _segment_stats(df_signal):
     seg_id = (sign != sign.shift(1)).cumsum()
     segs = d.groupby(seg_id)
     seg_total = len(segs)
-    seg_hits = sum(1 for _, g in segs if g["hit"].sum() > len(g) / 2)
+    seg_hits = sum(1 for _, g in segs if g["hit"].iloc[0])
     seg_rate = seg_hits / seg_total * 100 if seg_total > 0 else 0.0
     seg_avg_days = segs.size().mean() if seg_total > 0 else 0.0
     return seg_total, seg_hits, seg_rate, seg_avg_days
