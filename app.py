@@ -295,7 +295,7 @@ def _pearson_corr_matrix(value_arrays, win, weights=None):
     return mat
 
 
-def _lgbm_weights(valid_data, bt_factors, win, la, th, tk, price_vals, n, eval_start, eval_end):
+def _learn_weights(valid_data, bt_factors, win, la, th, tk, price_vals, n, eval_start, eval_end):
     """用逻辑回归从回测数据中学习各因子最优权重。
     收集每个回测日各因子的相似度 → 逻辑回归 → 系数归一化为权重。
     """
