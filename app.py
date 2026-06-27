@@ -2158,7 +2158,7 @@ if tab_idx == 7:
                                     )
 
                                 # ---- 时间交叉验证: Top 1 配置在 3 个滚动窗口上验证鲁棒性 ----
-                                if test_rows and not use_lgbm:
+                                if test_rows:
                                     best = test_rows[0]
                                     win_cv, la_cv, th_cv, tk_cv = int(best["_win"]), int(best["_la"]), best["_th"], int(best["_tk"])
                                     w_cv = best.get("_weights", bt_weight_list)
