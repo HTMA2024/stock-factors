@@ -1241,36 +1241,19 @@ if tab_idx == 7:
                             if scores:
                                 scores.sort(key=lambda x: -x[0])
                                 top = scores[:bt_topk]
-                                if ensemble_mode:
-                                    lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
-                                    pred_by_la = [[] for _ in lheads]
-                                    for _, _, futs in top:
-                                        for li, fut in enumerate(futs):
-                                            if len(fut) >= 2:
-                                                pred_by_la[li].append((fut[-1] - fut[0]) / fut[0])
-                                    pred_by_la = [pr for pr in pred_by_la if pr]
-                                    if pred_by_la:
-                                        direction = _ensemble_dir(pred_by_la)
-                                        mid_i = len(pred_by_la) // 2
-                                        avg_pred = np.mean(pred_by_la[mid_i]) if pred_by_la[mid_i] else 0
-                                    else:
-                                        continue
-                                else:
-                                    pred_returns = []
-                                    for _, _, futs in top:
-                                        if len(futs) >= 2:
-                                            pred_returns.append((futs[-1] - futs[0]) / futs[0])
-                                    avg_pred = np.mean(pred_returns) if pred_returns else 0
+                                lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
+                                pred_by_la = [[] for _ in lheads]
+                                for _, _, futs in top:
+                                    for li, fut in enumerate(futs):
+                                        if len(fut) >= 2:
+                                            pred_by_la[li].append((fut[-1] - fut[0]) / fut[0])
+                                pred_by_la = [pr for pr in pred_by_la if pr]
+                                if not pred_by_la:
+                                    continue
+                                direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
                                 actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
-                                if ensemble_mode:
-                                    hit = (direction == 1 and actual_return > 0) or (direction == -1 and actual_return < 0) or (direction == 0 and abs(actual_return) < 0.001)
-                                    neutral = (direction == 0)
-                                elif abs(avg_pred) < 0.001:
-                                    hit, neutral = False, True
-                                else:
-                                    hit = (avg_pred > 0 and actual_return > 0) or \
-                                          (avg_pred < 0 and actual_return < 0)
-                                    neutral = False
+                                hit, neutral = _classify_hit(direction, avg_pred, actual_return,
+                                                             ensemble_mode, ensemble_neutral_hit=True)
                                 res.append({
                                     "date": valid_bt.index[t],
                                     "matches": len(scores),
