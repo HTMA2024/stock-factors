@@ -1396,41 +1396,41 @@ if tab_idx == 7:
                                     tpl_idx = t - win
                                     hist_end = tpl_idx - win
                                     if hist_end >= 0:
-                                    row = combined_corr[tpl_idx, :hist_end + 1]
-                                    # Pearson 宽松初筛, 最终阈值由 DTW/Pearson 决定
-                                    loose_mask = (row + 1) / 2 >= 0.5  # r >= 0
-                                    if loose_mask.any():
-                                        if bt_algo in ("dtw", "pearson_dtw"):
-                                            # DTW 模式: Pearson 初筛 → DTW 筛选+排名
-                                            dtw_scores = []
-                                            for mi in np.where(loose_mask)[0]:
-                                                dtw_sim = 0.0
-                                                for f in bt_factors:
-                                                    tpl_v = vals_dict_t[f][t - win:t]
-                                                    win_v = vals_dict_t[f][mi:mi + win]
-                                                    s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
-                                                    if not np.isnan(s):
-                                                        dtw_sim += s
-                                                dtw_sim /= len(bt_factors)
-                                                if dtw_sim >= th:
-                                                    dtw_scores.append((mi, dtw_sim))
-                                            if dtw_scores:
-                                                dtw_scores.sort(key=lambda x: -x[1])
-                                                top_k_idx = [x[0] for x in dtw_scores[:tk]]
+                                        row = combined_corr[tpl_idx, :hist_end + 1]
+                                        # Pearson 宽松初筛, 最终阈值由 DTW/Pearson 决定
+                                        loose_mask = (row + 1) / 2 >= 0.5  # r >= 0
+                                        if loose_mask.any():
+                                            if bt_algo in ("dtw", "pearson_dtw"):
+                                                # DTW 模式: Pearson 初筛 → DTW 筛选+排名
+                                                dtw_scores = []
+                                                for mi in np.where(loose_mask)[0]:
+                                                    dtw_sim = 0.0
+                                                    for f in bt_factors:
+                                                        tpl_v = vals_dict_t[f][t - win:t]
+                                                        win_v = vals_dict_t[f][mi:mi + win]
+                                                        s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
+                                                        if not np.isnan(s):
+                                                            dtw_sim += s
+                                                    dtw_sim /= len(bt_factors)
+                                                    if dtw_sim >= th:
+                                                        dtw_scores.append((mi, dtw_sim))
+                                                if dtw_scores:
+                                                    dtw_scores.sort(key=lambda x: -x[1])
+                                                    top_k_idx = [x[0] for x in dtw_scores[:tk]]
+                                                else:
+                                                    continue
                                             else:
-                                                continue
-                                        else:
-                                            row_sim = (row + 1) / 2
-                                            match_idx = np.where(row_sim >= th)[0]
-                                            top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
+                                                row_sim = (row + 1) / 2
+                                                match_idx = np.where(row_sim >= th)[0]
+                                                top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
 
-                                            pred_rets = []
-                                            for s_idx in top_k_idx:
-                                                s_end_pos = s_idx + win - 1
-                                                if s_end_pos + la <= n_tune:
-                                                    fut_s = vals_dict_t[bt_factors[0]][s_end_pos]
-                                                    fut_e = vals_dict_t[bt_factors[0]][s_end_pos + la - 1]
-                                                    pred_rets.append((fut_e - fut_s) / fut_s)
+                                                pred_rets = []
+                                                for s_idx in top_k_idx:
+                                                    s_end_pos = s_idx + win - 1
+                                                    if s_end_pos + la <= n_tune:
+                                                        fut_s = vals_dict_t[bt_factors[0]][s_end_pos]
+                                                        fut_e = vals_dict_t[bt_factors[0]][s_end_pos + la - 1]
+                                                        pred_rets.append((fut_e - fut_s) / fut_s)
                                             if pred_rets:
                                                 avg_pred = np.mean(pred_rets)
                                                 act_s = vals_dict_t[bt_factors[0]][t]
