@@ -1082,12 +1082,18 @@ if tab_idx == 7:
                                         actual_start = price_vals[t]
                                         actual_end = price_vals[t + bt_lookahead - 1]
                                         actual_return = (actual_end - actual_start) / actual_start
-                                        hit = (avg_pred > 0 and actual_return > 0) or (avg_pred < 0 and actual_return < 0) or \
-                                              (abs(avg_pred) < 0.001 and abs(actual_return) < 0.001)
+                                        if abs(avg_pred) < 0.001:
+                                            hit = False
+                                            neutral = True
+                                        else:
+                                            hit = (avg_pred > 0 and actual_return > 0) or \
+                                                  (avg_pred < 0 and actual_return < 0)
+                                            neutral = False
                                         results.append({
                                             "date": valid_bt.index[t], "matches": len(match_indices),
                                             "top_r": top_scores[0], "pred_return": avg_pred,
                                             "actual_return": actual_return, "hit": hit,
+                                            "neutral": neutral,
                                         })
                             progress_bar.progress((ti + 1) / total_days)
                     else:
