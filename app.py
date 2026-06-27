@@ -172,6 +172,7 @@ FACTOR_PRESETS = {
     "多维度": ["close", "vol_ratio", "j"],
     "纯技术": ["rsi14", "j", "vol_ratio"],
     "估值+价": ["close", "pe_ttm"],
+    "形态信号": ["sig_macross", "sig_rsizone", "sig_volbreak"],
 }
 
 
