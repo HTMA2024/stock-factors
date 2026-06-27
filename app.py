@@ -1154,6 +1154,17 @@ if tab_idx == 7:
             st.warning("请选择匹配因子")
         else:
             valid_bt = df_factors[bt_factors].dropna()
+            # ---- 趋势分层: 为每个交易日贴牛/熊/震荡标签 ----
+            regime_labels = np.full(len(valid_bt), "震荡", dtype=object)
+            if "ma60" in df_factors.columns and "ma250" in df_factors.columns:
+                close_all = df_factors["close"].reindex(valid_bt.index)
+                ma60_all = df_factors["ma60"].reindex(valid_bt.index)
+                ma250_all = df_factors["ma250"].reindex(valid_bt.index)
+                ma60_rising = ma60_all > ma60_all.shift(20)
+                regime_labels[(close_all > ma250_all) & ma60_rising] = "牛市"
+                regime_labels[(close_all < ma250_all) & ~ma60_rising] = "熊市"
+            regime_series = pd.Series(regime_labels, index=valid_bt.index)
+            st.caption(f"趋势分层: 牛市 {(regime_labels=='牛市').sum()} 天, 熊市 {(regime_labels=='熊市').sum()} 天, 震荡 {(regime_labels=='震荡').sum()} 天")
             n = len(valid_bt)
 
             if n < bt_window * 5:
