@@ -1520,8 +1520,16 @@ if tab_idx == 7:
                 ("命中段数", seg_hits, None, None),
                 ("去重叠命中率", f"{seg_hitrate:.1f}%",
                  f"{seg_hitrate - hit_rate:+.1f}% vs 原始" if total > 0 else None, None),
-                ("段均天数", f"{test_seg_avg_days:.1f}" if seg_total > 0 else "-", None, None),
+                 ("段均天数", f"{test_seg_avg_days:.1f}" if seg_total > 0 else "-", None, None),
             ])
+
+        # ---- 趋势分层命中率 ----
+        if regime_series is not None and len(df_res_sorted) > 0:
+            df_res_sorted["regime"] = regime_series.reindex(df_res_sorted["date"]).values
+            by_regime = df_res_sorted.groupby("regime").agg(总数=("hit", "count"), 命中=("hit", "sum"))
+            by_regime["命中率%"] = (by_regime["命中"] / by_regime["总数"] * 100).round(1)
+            st.caption("趋势分层命中率")
+            st.dataframe(by_regime[["总数", "命中", "命中率%"]].sort_index(), width='stretch')
 
         # 预测 vs 实际散点图 (全部日, 3色: 绿=命中 红=未命中 灰=中性)
         fig = go.Figure()
