@@ -1393,7 +1393,7 @@ if tab_idx == 7:
             df_sig_sorted = df_signal
 
         st.divider()
-        st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段 (中性日已排除), 段内过半命中才算正确")
+        st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段 (中性日已排除), 仅段首日命中即算正确 (避免重叠模板重复投票虚高)")
         if has_train and len(df_train_sig) > 0:
             train_seg_total, train_seg_hits, train_seg_rate, train_seg_avg_days = _segment_stats(df_train_sig)
             # 第一行: 训练段
