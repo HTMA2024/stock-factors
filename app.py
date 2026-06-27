@@ -1185,17 +1185,12 @@ if tab_idx == 7:
                                 st.caption(f"Walk-forward: 训练集 {train_end - full_start} 天, 测试集 {end_idx - train_end} 天")
                                 results_train = _run_bt_slow(full_start, train_end, pearson_mat_bt)
                                 results_test = _run_bt_slow(train_end, end_idx, pearson_mat_bt)
-                                st.session_state.bt_train_results = results_train
-                                st.session_state.bt_results = results_test
+                                st.session_state.bt_train_results = results_train if results_train else None
+                                st.session_state.bt_results = results_test if results_test else None
                             else:
                                 results = _run_bt_slow(start_idx, end_idx, pearson_mat_bt)
-                                st.session_state.bt_results = results
+                                st.session_state.bt_results = results if results else None
                                 st.session_state.bt_train_results = None
-                    if not results:
-                        st.info(f"未找到任何满足阈值 {bt_threshold} 的匹配, 尝试降低阈值")
-                        st.session_state.bt_results = None
-                    else:
-                        st.session_state.bt_results = results  # 持久化, 参数变动不清空
 
 
     # ---- 回测结果展示 (从缓存读取, 参数变动不清空) ----
