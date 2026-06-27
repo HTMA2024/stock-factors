@@ -1920,7 +1920,8 @@ if tab_idx == 7:
                             metrics = _compute_metrics(results_t)
                             if not metrics:
                                 return 0.0
-                            return metrics["段命中率%"]
+                            # 用 Wilson 下界替代原始命中率, 自动惩罚低段数刷分
+                            return _wilson_lower(metrics["命中段数"], metrics["信号段数"])
 
                         n_optuna_trials = 200
                         st.caption(f"算法: {algo_label} + Optuna 联合优化 | 三段切分: 训练 {train_days}天 → 验证 {valid_days}天 → 测试 {test_days}天 | 搜索 {n_optuna_trials} 次...")
