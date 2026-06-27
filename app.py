@@ -1108,8 +1108,8 @@ if tab_idx == 7:
                                     if pred_by_la:
                                         if ensemble_mode:
                                             direction = _ensemble_dir(pred_by_la)
-                                            mid_la_idx = len(lheads) // 2
-                                            avg_pred = np.mean(pred_by_la[mid_la_idx]) if pred_by_la[mid_la_idx] else 0
+                                            mid_i = len(pred_by_la) // 2
+                                            avg_pred = np.mean(pred_by_la[mid_i]) if pred_by_la[mid_i] else 0
                                         else:
                                             avg_pred = np.mean(pred_by_la[0])
                                         actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
