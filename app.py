@@ -1189,7 +1189,10 @@ if tab_idx == 7:
                                             pred_returns.append((futs[-1] - futs[0]) / futs[0])
                                     avg_pred = np.mean(pred_returns) if pred_returns else 0
                                 actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
-                                if abs(avg_pred) < 0.001:
+                                if ensemble_mode:
+                                    hit = (direction == 1 and actual_return > 0) or (direction == -1 and actual_return < 0) or (direction == 0 and abs(actual_return) < 0.001)
+                                    neutral = (direction == 0)
+                                elif abs(avg_pred) < 0.001:
                                     hit, neutral = False, True
                                 else:
                                     hit = (avg_pred > 0 and actual_return > 0) or \
