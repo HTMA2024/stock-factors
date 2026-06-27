@@ -1259,6 +1259,12 @@ if tab_idx == 7:
                                 st.session_state.bt_train_results = None
 
     # ---- 回测结果展示 (从缓存读取, 参数变动不清空) ----
+    if "tune_df" in st.session_state and st.session_state.tune_df is not None:
+        df_t = st.session_state.tune_df
+        with st.expander("📊 自动调参结果 (Top 5)", expanded=True):
+            st.dataframe(df_t.head(5), width='stretch', hide_index=True,
+                         column_config={"训练段命中率%": st.column_config.NumberColumn(format="%.1f%%")})
+
     if "bt_results" in st.session_state and st.session_state.bt_results is None:
         has_train_none = ("bt_train_results" not in st.session_state or
                           st.session_state.bt_train_results is None)
