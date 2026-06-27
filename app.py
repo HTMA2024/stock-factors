@@ -1460,23 +1460,32 @@ if tab_idx == 7:
                                                 act_s = price_vals_t[t]
                                                 act_e = price_vals_t[t + la - 1]
                                                 act_ret = (act_e - act_s) / act_s
-                                                hit = (avg_pred > 0 and act_ret > 0) or (avg_pred < 0 and act_ret < 0) or \
-                                                          (abs(avg_pred) < 0.001 and abs(act_ret) < 0.001)
+                                                if abs(avg_pred) < 0.001:
+                                                    hit = False
+                                                    neutral = True
+                                                else:
+                                                    hit = (avg_pred > 0 and act_ret > 0) or \
+                                                          (avg_pred < 0 and act_ret < 0)
+                                                    neutral = False
                                                 results_t.append({
                                                     "pred_return": avg_pred,
                                                     "actual_return": act_ret,
                                                     "hit": hit,
+                                                    "neutral": neutral,
                                                 })
 
                                     if results_t:
                                         df_t = pd.DataFrame(results_t)
-                                        df_t["pred_sign"] = np.sign(df_t["pred_return"].fillna(0))
-                                        df_t["seg"] = (df_t["pred_sign"] != df_t["pred_sign"].shift(1)).cumsum()
-                                        segs = df_t.groupby("seg")
+                                        df_t_signal = df_t[~df_t["neutral"]]
+                                        if len(df_t_signal) == 0:
+                                            continue
+                                        df_t_signal["pred_sign"] = np.sign(df_t_signal["pred_return"].fillna(0))
+                                        df_t_signal["seg"] = (df_t_signal["pred_sign"] != df_t_signal["pred_sign"].shift(1)).cumsum()
+                                        segs = df_t_signal.groupby("seg")
                                         seg_total = len(segs)
                                         seg_hit = sum(1 for _, g in segs if g["hit"].sum() > len(g) / 2)
                                         seg_rate = seg_hit / seg_total * 100 if seg_total > 0 else 0
-                                        raw_rate = df_t["hit"].sum() / len(df_t) * 100
+                                        raw_rate = df_t_signal["hit"].sum() / len(df_t_signal) * 100
 
                                         tune_results.append({
                                             "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
