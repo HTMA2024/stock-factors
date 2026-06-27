@@ -1462,14 +1462,7 @@ if tab_idx == 7:
             for d, p, a, m in zip(df_res["date"], df_res["pred_return"],
                                   df_res["actual_return"], df_res.get("matches", [0] * len(df_res)))
         ]
-        color_map = []
-        for h, n in zip(df_res["hit"], df_res["neutral"]):
-            if n:
-                color_map.append("#9e9e9e")
-            elif h:
-                color_map.append("#26a69a")
-            else:
-                color_map.append("#ef5350")
+        color_map = [_hit_color(h, n) for h, n in zip(df_res["hit"], df_res["neutral"])]
         fig.add_trace(go.Scatter(
             x=df_res["pred_return"] * 100, y=df_res["actual_return"] * 100,
             mode="markers",
@@ -1505,14 +1498,7 @@ if tab_idx == 7:
 
         # 命中/未命中时间线
         fig_tl = go.Figure()
-        timeline_colors = []
-        for h, n in zip(df_res["hit"], df_res["neutral"]):
-            if n:
-                timeline_colors.append("#9e9e9e")
-            elif h:
-                timeline_colors.append("#26a69a")
-            else:
-                timeline_colors.append("#ef5350")
+        timeline_colors = [_hit_color(h, n) for h, n in zip(df_res["hit"], df_res["neutral"])]
         fig_tl.add_trace(go.Scatter(
             x=df_res["date"], y=[1] * len(df_res),
             mode="markers",
