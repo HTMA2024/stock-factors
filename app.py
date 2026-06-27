@@ -359,6 +359,14 @@ def _hit_color(hit, neutral):
     return "#26a69a" if hit else "#ef5350"
 
 
+def _metric_row(specs):
+    """渲染一行指标卡片。specs: list of (label, value, delta, help)，delta/help 可为 None。"""
+    cols = st.columns(len(specs))
+    for col, (label, value, delta, help_) in zip(cols, specs):
+        with col:
+            st.metric(label, value, delta=delta, help=help_)
+
+
 # ---- 辅助函数 ----
 def _plotly_chart(fig, height=400):
     """统一渲染 Plotly 图表"""
