@@ -1292,15 +1292,15 @@ if tab_idx == 7:
                 st.metric("测试段数", seg_total)
         else:
             sc1, sc2, sc3, sc4 = st.columns(4)
-        with sc1:
-            st.metric("信号段数", seg_total)
-        with sc2:
-            st.metric("命中段数", seg_hits)
-        with sc3:
-            st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
-                      delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始" if total > 0 else None)
-        with sc4:
-            st.metric("段均天数", f"{segments['持续天数'].mean():.1f}" if seg_total > 0 else "-")
+            with sc1:
+                st.metric("信号段数", seg_total)
+            with sc2:
+                st.metric("命中段数", seg_hits)
+            with sc3:
+                st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
+                          delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始" if total > 0 else None)
+            with sc4:
+                st.metric("段均天数", f"{segments['持续天数'].mean():.1f}" if seg_total > 0 else "-")
 
         # 预测 vs 实际散点图 (全部日, 3色: 绿=命中 红=未命中 灰=中性)
         fig = go.Figure()
