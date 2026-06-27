@@ -2081,7 +2081,7 @@ if tab_idx == 7:
                                 results_t = _eval_trial(
                                     win, la, th, tk, bt_algo, bt_factors,
                                     vals_dict_t, combined_corr, price_vals_t, n_tune,
-                                    test_start, tune_end,
+                                    test_start, tune_end, w_list,
                                 )
                                 test_metrics = _compute_metrics(results_t)
                                 if test_metrics:
