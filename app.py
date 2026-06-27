@@ -293,7 +293,80 @@ def _pearson_corr_matrix(value_arrays, win, weights=None):
         Wz = (W - mean) / std
         mat += w * (Wz @ Wz.T) / (win - 1)
     return mat
-    return mat
+
+
+def _lgbm_weights(valid_data, bt_factors, win, la, th, tk, price_vals, n, eval_start, eval_end):
+    """用 LightGBM 从回测数据中学习各因子最优权重。
+    收集每个回测日各因子的相似度 → 训练 → 输出特征重要性作为权重。
+    """
+    import lightgbm as lgb
+
+    # 收集训练数据: 每个匹配的各因子 Pearson 相似度 + 是否命中
+    X_train = []
+    y_train = []
+
+    # 等权相关矩阵
+    vals_dict = {f: valid_data[f].values for f in bt_factors}
+    corr = _pearson_corr_matrix([vals_dict[f] for f in bt_factors], win)
+
+    for t in range(eval_start, eval_end):
+        tpl_idx = t - win
+        hist_end = tpl_idx - win
+        if hist_end < 0:
+            continue
+        row = corr[tpl_idx, :hist_end + 1]
+        row_sim = (row + 1) / 2
+        match_idx = np.where(row_sim >= th)[0]
+        if len(match_idx) == 0:
+            continue
+
+        # 取 Top K 匹配, 收集每个匹配的各因子相似度
+        top_k = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
+        for s_idx in top_k:
+            # 各因子相似度 (Pearson r → [0,1])
+            factor_sims = []
+            for f in bt_factors:
+                tpl_v = vals_dict[f][t - win:t]
+                win_v = vals_dict[f][s_idx:s_idx + win]
+                if np.std(tpl_v) > 0 and np.std(win_v) > 0:
+                    r, _ = pearsonr(tpl_v, win_v)
+                    factor_sims.append((r + 1) / 2)
+                else:
+                    factor_sims.append(0.5)
+
+            # 该匹配的后续收益 → 方向
+            s_end = s_idx + win - 1
+            if s_end + 1 + la <= n:
+                pred_ret = (price_vals[s_end + la] - price_vals[s_end + 1]) / price_vals[s_end + 1]
+            else:
+                continue
+
+            # 实际收益
+            if t + la <= n:
+                act_ret = (price_vals[t + la - 1] - price_vals[t]) / price_vals[t]
+            else:
+                continue
+
+            hit = (pred_ret > 0 and act_ret > 0) or (pred_ret < 0 and act_ret < 0)
+            X_train.append(factor_sims)
+            y_train.append(1 if hit else 0)
+
+    if len(X_train) < 20:
+        return None  # 数据不足
+
+    X_train = np.array(X_train)
+    y_train = np.array(y_train)
+
+    # 训练 LightGBM
+    model = lgb.LGBMClassifier(n_estimators=50, max_depth=3, verbose=-1, n_jobs=1)
+    model.fit(X_train, y_train)
+
+    # 特征重要性 → 归一化为权重
+    importances = model.feature_importances_
+    if importances.sum() == 0:
+        return None
+    weights = importances / importances.sum()
+    return dict(zip(bt_factors, weights))
 
 
 def _predict_direction(pred_by_la, ensemble):
