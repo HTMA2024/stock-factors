@@ -1046,72 +1046,127 @@ if tab_idx == 7:
                     vals_dict = {f: valid_bt[f].values for f in bt_factors}
                     price_vals = df_factors.loc[valid_bt.index, "close"].values
                     win = bt_window
-                    results = []
 
-                    if fast_mode and bt_algo == "pearson":
-                        # ---- 快速模式: 预计算相关系数矩阵 ----
-                        with st.spinner(f"预计算相关系数矩阵 ({len(bt_factors)} 因子 × {n - win + 1} 窗口)..."):
-                            # 为每个因子构建 z-score 窗口矩阵, 各窗口相关系数 = dot_product / (win-1)
-                            combined_corr = np.zeros((n - win + 1, n - win + 1))
-                            for factor in bt_factors:
-                                vals = vals_dict[factor]
-                                # 滑动窗口: shape (n-win+1, win)
-                                W = np.lib.stride_tricks.sliding_window_view(vals, win)
-                                # z-score 每行
-                                mean = W.mean(axis=1, keepdims=True)
-                                std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
-                                Wz = (W - mean) / std
-                                # 相关系数矩阵 = Wz @ Wz.T / (win-1)
-                                corr = Wz @ Wz.T / (win - 1)
-                                combined_corr += corr * (1.0 / len(bt_factors))
+                    full_start = start_idx  # 记住原始起始位, walk-forward 时需要
 
-                        # 逐日查矩阵
-                        progress_bar = st.progress(0)
-                        for ti, t in enumerate(range(start_idx, end_idx)):
-                            tpl_idx = t - win  # 模板窗口在矩阵中的起始索引: W[i] = vals[i:i+win]
-                            # 历史窗口: [0, tpl_idx - win] (模板开始前结束)
+                    def _run_bt_fast(eval_start, eval_end, combined_corr):
+                        res = []
+                        edays = eval_end - eval_start
+                        for ti, t in enumerate(range(eval_start, eval_end)):
+                            tpl_idx = t - win
                             hist_end = tpl_idx - win
                             if hist_end >= 0:
                                 row = combined_corr[tpl_idx, :hist_end + 1]
-                                # Pearson r [-1,1] → 相似度 [0,1], 与慢速模式一致
                                 row_sim = (row + 1) / 2
                                 match_indices = np.where(row_sim >= bt_threshold)[0]
                                 if len(match_indices) > 0:
-                                    # 取 Top K 匹配
                                     match_scores = row[match_indices]
                                     top_k_idx = match_indices[np.argsort(-match_scores)[:bt_topk]]
                                     top_scores = row[top_k_idx]
-
                                     pred_returns = []
                                     for s_idx in top_k_idx:
-                                        s_end = s_idx + win - 1  # 历史窗口结束位置
+                                        s_end = s_idx + win - 1
                                         if s_end + 1 + bt_lookahead <= n:
-                                            fut_start = price_vals[s_end + 1]
-                                            fut_end = price_vals[s_end + bt_lookahead]
-                                            pred_returns.append((fut_end - fut_start) / fut_start)
-
+                                            pred_returns.append(
+                                                (price_vals[s_end + bt_lookahead] - price_vals[s_end + 1])
+                                                / price_vals[s_end + 1]
+                                            )
                                     if pred_returns:
                                         avg_pred = np.mean(pred_returns)
-                                        actual_start = price_vals[t]
-                                        actual_end = price_vals[t + bt_lookahead - 1]
-                                        actual_return = (actual_end - actual_start) / actual_start
+                                        actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
                                         if abs(avg_pred) < 0.001:
-                                            hit = False
-                                            neutral = True
+                                            hit, neutral = False, True
                                         else:
                                             hit = (avg_pred > 0 and actual_return > 0) or \
                                                   (avg_pred < 0 and actual_return < 0)
                                             neutral = False
-                                        results.append({
+                                        res.append({
                                             "date": valid_bt.index[t], "matches": len(match_indices),
                                             "top_r": top_scores[0], "pred_return": avg_pred,
                                             "actual_return": actual_return, "hit": hit,
                                             "neutral": neutral,
                                         })
-                            progress_bar.progress((ti + 1) / total_days)
+                        return res
+
+                    def _run_bt_slow(eval_start, eval_end, pearson_mat):
+                        res = []
+                        edays = eval_end - eval_start
+                        for ti, t in enumerate(range(eval_start, eval_end)):
+                            tpl_vals = {f: vals_dict[f][t - win:t] for f in bt_factors}
+                            scores = []
+                            for s in range(win, t - win + 1):
+                                win_vals = {f: vals_dict[f][s - win:s] for f in bt_factors}
+                                sims = []
+                                if bt_algo == "dtw":
+                                    for f in bt_factors:
+                                        s_val = _dtw_similarity(tpl_vals[f], win_vals[f],
+                                                                min_similarity=bt_threshold)
+                                        if not np.isnan(s_val):
+                                            sims.append(s_val)
+                                elif bt_algo == "pearson_dtw":
+                                    if pearson_mat[t - win, s - win] >= 0.3:
+                                        for f in bt_factors:
+                                            s_val = _dtw_similarity(tpl_vals[f], win_vals[f],
+                                                                    min_similarity=bt_threshold)
+                                            if not np.isnan(s_val):
+                                                sims.append(s_val)
+                                else:
+                                    for f in bt_factors:
+                                        s_val = _compute_single_similarity(tpl_vals[f], win_vals[f], bt_algo)
+                                        if not np.isnan(s_val):
+                                            sims.append(s_val)
+                                if sims and np.mean(sims) >= bt_threshold:
+                                    fut_end = min(s + bt_lookahead, n)
+                                    scores.append((np.mean(sims), s, price_vals[s:fut_end]))
+                            if scores:
+                                scores.sort(key=lambda x: -x[0])
+                                top = scores[:bt_topk]
+                                pred_returns = []
+                                for _, _, fut in top:
+                                    if len(fut) >= 2:
+                                        pred_returns.append((fut[-1] - fut[0]) / fut[0])
+                                avg_pred = np.mean(pred_returns) if pred_returns else 0
+                                actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
+                                if abs(avg_pred) < 0.001:
+                                    hit, neutral = False, True
+                                else:
+                                    hit = (avg_pred > 0 and actual_return > 0) or \
+                                          (avg_pred < 0 and actual_return < 0)
+                                    neutral = False
+                                res.append({
+                                    "date": valid_bt.index[t],
+                                    "matches": len(scores),
+                                    "top_r": scores[0][0],
+                                    "pred_return": avg_pred,
+                                    "actual_return": actual_return,
+                                    "hit": hit,
+                                    "neutral": neutral,
+                                })
+                        return res
+
+                    # ---- 执行回测 ----
+                    if fast_mode and bt_algo == "pearson":
+                        with st.spinner(f"预计算相关系数矩阵 ({len(bt_factors)} 因子 × {n - win + 1} 窗口)..."):
+                            combined_corr = np.zeros((n - win + 1, n - win + 1))
+                            for factor in bt_factors:
+                                vals = vals_dict[factor]
+                                W = np.lib.stride_tricks.sliding_window_view(vals, win)
+                                mean = W.mean(axis=1, keepdims=True)
+                                std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
+                                Wz = (W - mean) / std
+                                combined_corr += (Wz @ Wz.T) / (win - 1) * (1.0 / len(bt_factors))
+
+                        if walk_forward:
+                            st.caption(f"Walk-forward: 训练集 {train_end - full_start} 天, 测试集 {end_idx - train_end} 天")
+                            results_train = _run_bt_fast(full_start, train_end, combined_corr)
+                            results_test = _run_bt_fast(train_end, end_idx, combined_corr)
+                            st.session_state.bt_train_results = results_train
+                            st.session_state.bt_results = results_test
+                        else:
+                            results = _run_bt_fast(start_idx, end_idx, combined_corr)
+                            st.session_state.bt_results = results
+                            st.session_state.bt_train_results = None
                     else:
-                        # ---- 慢速模式: 逐日滑动 (支持 DTW + LB_Keogh 剪枝) ----
-                        # pearson_dtw: 预计算 Pearson 矩阵做初筛
                         pearson_mat_bt = None
                         if bt_algo == "pearson_dtw":
                             n_win_bt = n - win + 1
@@ -1126,73 +1181,16 @@ if tab_idx == 7:
                             pearson_mat_bt /= len(bt_factors)
 
                         with st.spinner(f"正在回测 {total_days} 个交易日..."):
-                            progress_bar = st.progress(0)
-                            for ti, t in enumerate(range(start_idx, end_idx)):
-                                # 模板: [t-win, t)
-                                tpl_vals = {f: vals_dict[f][t - win:t] for f in bt_factors}
-
-                                # 搜索历史窗口: [win-1, t-win)
-                                scores = []
-                                for s in range(win, t - win + 1):
-                                    win_vals = {f: vals_dict[f][s - win:s] for f in bt_factors}
-                                    sims = []
-                                    if bt_algo == "dtw":
-                                        for f in bt_factors:
-                                            s_val = _dtw_similarity(tpl_vals[f], win_vals[f],
-                                                                    min_similarity=bt_threshold)
-                                            if not np.isnan(s_val):
-                                                sims.append(s_val)
-                                    elif bt_algo == "pearson_dtw":
-                                        if pearson_mat_bt[t - win, s - win] >= 0.3:
-                                            for f in bt_factors:
-                                                s_val = _dtw_similarity(tpl_vals[f], win_vals[f],
-                                                                        min_similarity=bt_threshold)
-                                                if not np.isnan(s_val):
-                                                    sims.append(s_val)
-                                    else:
-                                        for f in bt_factors:
-                                            s_val = _compute_single_similarity(tpl_vals[f], win_vals[f], bt_algo)
-                                            if not np.isnan(s_val):
-                                                sims.append(s_val)
-                                    if sims:
-                                        avg_sim = np.mean(sims)
-                                        if avg_sim >= bt_threshold:
-                                            fut_end = min(s + bt_lookahead, n)
-                                            fut = price_vals[s:fut_end]
-                                            scores.append((avg_sim, s, fut))
-    
-                                if scores:
-                                    scores.sort(key=lambda x: -x[0])
-                                    # Top K: 取前 K 个匹配 (不足 K 个则全取) 的后续收益率均值作为预测
-                                    top = scores[:bt_topk]
-                                    pred_returns = []
-                                    for _, _, fut in top:
-                                        if len(fut) >= 2:
-                                            pred_returns.append((fut[-1] - fut[0]) / fut[0])
-                                    avg_pred = np.mean(pred_returns) if pred_returns else 0
-    
-                                    # 实际 N 天后走势
-                                    actual_start = price_vals[t]
-                                    actual_end = price_vals[t + bt_lookahead - 1]
-                                    actual_return = (actual_end - actual_start) / actual_start
-    
-                                    if abs(avg_pred) < 0.001:
-                                        hit = False
-                                        neutral = True
-                                    else:
-                                        hit = (avg_pred > 0 and actual_return > 0) or \
-                                              (avg_pred < 0 and actual_return < 0)
-                                        neutral = False
-                                    results.append({
-                                        "date": valid_bt.index[t],
-                                        "matches": len(scores),
-                                        "top_r": scores[0][0],
-                                        "pred_return": avg_pred,
-                                        "actual_return": actual_return,
-                                        "hit": hit,
-                                        "neutral": neutral,
-                                })
-                                progress_bar.progress((ti + 1) / total_days)
+                            if walk_forward:
+                                st.caption(f"Walk-forward: 训练集 {train_end - full_start} 天, 测试集 {end_idx - train_end} 天")
+                                results_train = _run_bt_slow(full_start, train_end, pearson_mat_bt)
+                                results_test = _run_bt_slow(train_end, end_idx, pearson_mat_bt)
+                                st.session_state.bt_train_results = results_train
+                                st.session_state.bt_results = results_test
+                            else:
+                                results = _run_bt_slow(start_idx, end_idx, pearson_mat_bt)
+                                st.session_state.bt_results = results
+                                st.session_state.bt_train_results = None
                     if not results:
                         st.info(f"未找到任何满足阈值 {bt_threshold} 的匹配, 尝试降低阈值")
                         st.session_state.bt_results = None
