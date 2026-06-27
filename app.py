@@ -1551,11 +1551,7 @@ if tab_idx == 7:
             else:
                 valid_tune = df_factors[bt_factors].dropna()
                 n_tune = len(valid_tune)
-                bt_start_dt_t = pd.Timestamp(bt_start)
-                bt_end_dt_t = pd.Timestamp(bt_end)
-                tune_start = valid_tune.index.get_indexer([bt_start_dt_t], method="bfill")[0]
-                tune_end = valid_tune.index.get_indexer([bt_end_dt_t], method="ffill")[0] + 1
-                tune_start = max(tune_start, bt_window * 2)
+                tune_start, tune_end = _resolve_date_range(valid_tune.index, bt_start, bt_end, bt_window * 2)
                 tune_end = min(tune_end, n_tune - max(_bt_lookaheads(15, ensemble_mode)))
 
                 if tune_end - tune_start < 60:
