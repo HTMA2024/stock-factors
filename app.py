@@ -1139,7 +1139,7 @@ if tab_idx == 7:
                                         avg_sim = np.mean(sims)
                                         if avg_sim >= bt_threshold:
                                             fut_end = min(s + bt_lookahead, n)
-                                            fut = vals_dict[bt_factors[0]][s:fut_end]
+                                            fut = price_vals[s:fut_end]
                                             scores.append((avg_sim, s, fut))
     
                                 if scores:
@@ -1153,8 +1153,8 @@ if tab_idx == 7:
                                     avg_pred = np.mean(pred_returns) if pred_returns else 0
     
                                     # 实际 N 天后走势
-                                    actual_start = vals_dict[bt_factors[0]][t]
-                                    actual_end = vals_dict[bt_factors[0]][t + bt_lookahead - 1]
+                                    actual_start = price_vals[t]
+                                    actual_end = price_vals[t + bt_lookahead - 1]
                                     actual_return = (actual_end - actual_start) / actual_start
     
                                     hit = (avg_pred > 0 and actual_return > 0) or (avg_pred < 0 and actual_return < 0) or \
