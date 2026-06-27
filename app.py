@@ -1606,7 +1606,7 @@ if tab_idx == 7:
                     def _eval_trial(win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                     combined_corr, price_vals_t, n_tune, eval_start, eval_end):
                         results_t = []
-                        # Bug A+B fix: ensemble 模式下 horizon 固定为 10, 评估用 5
+                        # Ensemble: horizon 固定为 10, 评估也用 10
                         la_eff = 10 if ensemble_mode else la
                         la_eval = 10 if ensemble_mode else la
                         s_start = max(eval_start, win * 2)
