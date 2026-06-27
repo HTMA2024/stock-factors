@@ -1350,46 +1350,35 @@ if tab_idx == 7:
             train_neutral = int(df_train["neutral"].sum())
             train_n_total = train_total + train_neutral
 
-            # 第一行: 训练集
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.metric("训练集 有效信号日", train_total)
-            with c2:
-                st.metric("训练集 命中次数", train_hits)
-            with c3:
-                st.metric("训练集 命中率", f"{train_rate:.1f}%")
-            with c4:
-                st.metric("训练集 中性日", train_neutral,
-                          delta=f"{(train_neutral / train_n_total * 100):.0f}%" if train_n_total > 0 else None)
-
-            # 第二行: 测试集
             n_total = total + neutral_count
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.metric("测试集 有效信号日", total)
-            with c2:
-                st.metric("测试集 命中次数", hits)
-            with c3:
-                st.metric("测试集 命中率", f"{hit_rate:.1f}%",
-                          delta=f"{hit_rate - train_rate:+.1f}% vs 训练")
-            with c4:
-                st.metric("测试集 中性日", neutral_count,
-                          delta=f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
-                          help="预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算")
+            # 第一行: 训练集
+            _metric_row([
+                ("训练集 有效信号日", train_total, None, None),
+                ("训练集 命中次数", train_hits, None, None),
+                ("训练集 命中率", f"{train_rate:.1f}%", None, None),
+                ("训练集 中性日", train_neutral,
+                 f"{(train_neutral / train_n_total * 100):.0f}%" if train_n_total > 0 else None, None),
+            ])
+            # 第二行: 测试集
+            _metric_row([
+                ("测试集 有效信号日", total, None, None),
+                ("测试集 命中次数", hits, None, None),
+                ("测试集 命中率", f"{hit_rate:.1f}%", f"{hit_rate - train_rate:+.1f}% vs 训练", None),
+                ("测试集 中性日", neutral_count,
+                 f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
+                 "预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算"),
+            ])
         else:
             # 无 walk-forward: 一行
-            mc1, mc2, mc3, mc4 = st.columns(4)
-            with mc1:
-                st.metric("有效信号日", total, help="排除预测方向不明确的中性日")
-            with mc2:
-                st.metric("命中次数", hits)
-            with mc3:
-                st.metric("方向命中率", f"{hit_rate:.1f}%")
-            with mc4:
-                n_total = total + neutral_count
-                st.metric("中性日 (已排除)", neutral_count,
-                          delta=f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
-                          help="预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算")
+            n_total = total + neutral_count
+            _metric_row([
+                ("有效信号日", total, None, "排除预测方向不明确的中性日"),
+                ("命中次数", hits, None, None),
+                ("方向命中率", f"{hit_rate:.1f}%", None, None),
+                ("中性日 (已排除)", neutral_count,
+                 f"{(neutral_count / n_total * 100):.0f}%" if n_total > 0 else None,
+                 "预测方向中性 (|预测收益| < 0.1%), 不参与命中率计算"),
+            ])
 
         # ---- 去重叠统计 ----
         if len(df_signal) > 0:
