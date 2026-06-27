@@ -1597,7 +1597,7 @@ if tab_idx == 7:
                                     "测试有效日": metrics["有效信号日"],
                                     "测试中性日": metrics["中性日"],
                                 })
-                            test_progress.progress((ti + 1) / min(15, len(df_tune_train)))
+                            test_progress.progress((ti + 1) / top_n)
 
                         if test_rows:
                             df_final = pd.DataFrame(test_rows)
