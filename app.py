@@ -1002,6 +1002,9 @@ if tab_idx == 7:
     fast_mode = st.checkbox("⚡ 快速模式 (仅 Pearson, 矩阵加速)", value=True, key="bt_fast",
                             help="预计算相关系数矩阵, 秒级出结果。关闭后逐日滑动计算, 较慢但支持 DTW。")
 
+    walk_forward = st.checkbox("🔬 Walk-forward 验证 (70%训练/30%测试)", value=True, key="bt_wf",
+                                help="仅在测试集(后30%)回测。关闭则全量回测。")
+
     col_btns = st.columns(2)
     with col_btns[0]:
         run_bt = st.button("🚀 开始回测", type="primary", key="bt_run", width='stretch')
