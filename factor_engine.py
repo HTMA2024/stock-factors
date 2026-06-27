@@ -292,6 +292,56 @@ def compute_all_factors(
         growth = result["net_profit_yoy"].clip(lower=0.1)  # 避免负增长导致 PEG 异常
         result["peg"] = result["pe_ttm"] / growth
 
+    # ---- 技术形态信号 (二进制) ----
+    # MA 金叉/死叉: MA5 上穿/下穿 MA20
+    if "ma5" in result.columns and "ma20" in result.columns:
+        ma5 = result["ma5"].values
+        ma20 = result["ma20"].values
+        signal = np.zeros(len(ma5))
+        for i in range(1, len(signal)):
+            if ma5[i - 1] <= ma20[i - 1] and ma5[i] > ma20[i]:
+                signal[i] = 1  # 金叉
+            elif ma5[i - 1] >= ma20[i - 1] and ma5[i] < ma20[i]:
+                signal[i] = -1  # 死叉
+        result["sig_macross"] = signal
+
+    # RSI 超买超卖区域: RSI14 > 70 = 1, < 30 = -1, else 0
+    if "rsi14" in result.columns:
+        rsi = result["rsi14"].values
+        zone = np.zeros(len(rsi))
+        zone[rsi > 70] = 1
+        zone[rsi < 30] = -1
+        result["sig_rsizone"] = zone
+
+    # 放量/缩量: volume > 2x 20日均量 = 1, < 0.5x = -1
+    if "vol_ratio" in result.columns:
+        vr = result["vol_ratio"].values
+        vol_sig = np.zeros(len(vr))
+        vol_sig[vr >= 2.0] = 1
+        vol_sig[vr <= 0.5] = -1
+        result["sig_volbreak"] = vol_sig
+
+    # MACD 信号线交叉: DIF 上穿/下穿 DEA
+    if "dif" in result.columns and "dea" in result.columns:
+        dif = result["dif"].values
+        dea = result["dea"].values
+        macd_sig = np.zeros(len(dif))
+        for i in range(1, len(macd_sig)):
+            if dif[i - 1] <= dea[i - 1] and dif[i] > dea[i]:
+                macd_sig[i] = 1
+            elif dif[i - 1] >= dea[i - 1] and dif[i] < dea[i]:
+                macd_sig[i] = -1
+        result["sig_macd"] = macd_sig
+
+    # 布林带挤压: 带宽 < 20%分位 = 1 (即将变盘)
+    if "bb_width" in result.columns:
+        bw = result["bb_width"].dropna()
+        if len(bw) > 50:
+            threshold = np.percentile(bw, 20)
+            result["sig_bbsqueeze"] = (result["bb_width"] < threshold).astype(float)
+        else:
+            result["sig_bbsqueeze"] = 0.0
+
     # 市值因子 (对数市值, 避免极端值)
     if "total_mv" in result.columns:
         result["ln_mv"] = np.log(result["total_mv"].clip(lower=1))
