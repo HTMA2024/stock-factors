@@ -1428,7 +1428,7 @@ if tab_idx == 7:
                 st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
                           delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始" if total > 0 else None)
             with sc4:
-                st.metric("段均天数", f"{segments['持续天数'].mean():.1f}" if seg_total > 0 else "-")
+                st.metric("段均天数", f"{test_seg_avg_days:.1f}" if seg_total > 0 else "-")
 
         # 预测 vs 实际散点图 (全部日, 3色: 绿=命中 红=未命中 灰=中性)
         fig = go.Figure()
