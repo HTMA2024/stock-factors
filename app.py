@@ -1175,324 +1175,324 @@ if tab_idx == 7:
                         st.session_state.bt_results = results  # 持久化, 参数变动不清空
 
 
-# ---- 回测结果展示 (从缓存读取, 参数变动不清空) ----
-if "bt_results" in st.session_state and st.session_state.bt_results is not None:
-    df_res = pd.DataFrame(st.session_state.bt_results)
-    total = len(df_res)
-    hits = df_res["hit"].sum()
-    hit_rate = hits / total * 100
+    # ---- 回测结果展示 (从缓存读取, 参数变动不清空) ----
+    if "bt_results" in st.session_state and st.session_state.bt_results is not None:
+        df_res = pd.DataFrame(st.session_state.bt_results)
+        total = len(df_res)
+        hits = df_res["hit"].sum()
+        hit_rate = hits / total * 100
 
-    # 指标卡片 (原始)
-    mc1, mc2, mc3, mc4 = st.columns(4)
-    with mc1:
-        st.metric("回测天数", total)
-    with mc2:
-        st.metric("命中次数", hits)
-    with mc3:
-        st.metric("方向命中率", f"{hit_rate:.1f}%")
-    with mc4:
-        avg_matches = df_res["matches"].mean()
-        st.metric("日均匹配数", f"{avg_matches:.1f}")
+        # 指标卡片 (原始)
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        with mc1:
+            st.metric("回测天数", total)
+        with mc2:
+            st.metric("命中次数", hits)
+        with mc3:
+            st.metric("方向命中率", f"{hit_rate:.1f}%")
+        with mc4:
+            avg_matches = df_res["matches"].mean()
+            st.metric("日均匹配数", f"{avg_matches:.1f}")
 
-    # ---- 去重叠统计 ----
-    df_res_sorted = df_res.sort_values("date")
-    df_res_sorted["pred_sign"] = np.sign(df_res_sorted["pred_return"].fillna(0))
-    # 标记方向切换点 (相邻两天预测方向不同 = 新信号段)
-    df_res_sorted["segment"] = (df_res_sorted["pred_sign"] != df_res_sorted["pred_sign"].shift(1)).cumsum()
-    segments = df_res_sorted.groupby("segment").agg(
-        起始日期=("date", "first"),
-        结束日期=("date", "last"),
-        持续天数=("date", "count"),
-        预测方向=("pred_sign", "first"),
-        命中天数=("hit", "sum"),
-        平均预测收益=("pred_return", "mean"),
-        平均实际收益=("actual_return", "mean"),
-    )
-    segments["预测方向"] = segments["预测方向"].map({1: "看涨", -1: "看跌", 0: "中性"})
-    seg_total = len(segments)
-    seg_hits = (segments["命中天数"] > segments["持续天数"] / 2).sum()
-    seg_hitrate = seg_hits / seg_total * 100 if seg_total > 0 else 0
+        # ---- 去重叠统计 ----
+        df_res_sorted = df_res.sort_values("date")
+        df_res_sorted["pred_sign"] = np.sign(df_res_sorted["pred_return"].fillna(0))
+        # 标记方向切换点 (相邻两天预测方向不同 = 新信号段)
+        df_res_sorted["segment"] = (df_res_sorted["pred_sign"] != df_res_sorted["pred_sign"].shift(1)).cumsum()
+        segments = df_res_sorted.groupby("segment").agg(
+            起始日期=("date", "first"),
+            结束日期=("date", "last"),
+            持续天数=("date", "count"),
+            预测方向=("pred_sign", "first"),
+            命中天数=("hit", "sum"),
+            平均预测收益=("pred_return", "mean"),
+            平均实际收益=("actual_return", "mean"),
+        )
+        segments["预测方向"] = segments["预测方向"].map({1: "看涨", -1: "看跌", 0: "中性"})
+        seg_total = len(segments)
+        seg_hits = (segments["命中天数"] > segments["持续天数"] / 2).sum()
+        seg_hitrate = seg_hits / seg_total * 100 if seg_total > 0 else 0
 
-    st.divider()
-    st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段, 段内过半命中才算正确")
-    sc1, sc2, sc3, sc4 = st.columns(4)
-    with sc1:
-        st.metric("信号段数", seg_total)
-    with sc2:
-        st.metric("命中段数", seg_hits)
-    with sc3:
-        st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
-                  delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始")
-    with sc4:
-        st.metric("段均天数", f"{segments['持续天数'].mean():.1f}" if seg_total > 0 else "-")
+        st.divider()
+        st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段, 段内过半命中才算正确")
+        sc1, sc2, sc3, sc4 = st.columns(4)
+        with sc1:
+            st.metric("信号段数", seg_total)
+        with sc2:
+            st.metric("命中段数", seg_hits)
+        with sc3:
+            st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
+                      delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始")
+        with sc4:
+            st.metric("段均天数", f"{segments['持续天数'].mean():.1f}" if seg_total > 0 else "-")
 
-    # 预测 vs 实际散点图
-    fig = go.Figure()
-    hover_texts = [
-        f"{d.strftime('%Y-%m-%d')}<br>预测: {p*100:+.2f}%<br>实际: {a*100:+.2f}%<br>匹配数: {m}"
-        for d, p, a, m in zip(df_res["date"], df_res["pred_return"],
-                              df_res["actual_return"], df_res["matches"])
-    ]
-    fig.add_trace(go.Scatter(
-        x=df_res["pred_return"] * 100, y=df_res["actual_return"] * 100,
-        mode="markers",
-        marker=dict(
-            color=["#26a69a" if h else "#ef5350" for h in df_res["hit"]],
-            size=7, opacity=0.6,
-        ),
-        customdata=hover_texts,
-        hovertemplate="%{customdata}<extra></extra>",
-        name="绿=命中 红=未命中",
-    ))
-    fig.add_hline(y=0, line_dash="dot", line_color="gray")
-    fig.add_vline(x=0, line_dash="dot", line_color="gray")
-    fig.update_layout(
-        title=f"预测 vs 实际 (命中率 {hit_rate:.1f}%, 绿=方向正确, 红=方向错误)",
-        xaxis_title="预测收益率 (%)", yaxis_title="实际收益率 (%)",
-        height=400,
-    )
-    _plotly_chart(fig, height=450)
-
-    # 按预测方向分组的统计
-    st.subheader("按预测方向分组")
-    df_res["pred_dir"] = df_res["pred_return"].apply(
-        lambda x: "看涨" if x > 0.001 else ("看跌" if x < -0.001 else "中性")
-    )
-    dir_stats = df_res.groupby("pred_dir").agg(
-        次数=("hit", "count"),
-        命中率=("hit", lambda x: x.sum() / len(x) * 100),
-        平均实际收益=("actual_return", lambda x: np.mean(x) * 100),
-    ).round(1)
-    st.dataframe(dir_stats, width='stretch')
-
-    # ---- 时间分布 ----
-    st.subheader("命中/未命中 时间分布")
-
-    # 命中/未命中时间线
-    fig_tl = go.Figure()
-    fig_tl.add_trace(go.Scatter(
-        x=df_res_sorted["date"], y=[1] * len(df_res_sorted),
-        mode="markers",
-        marker=dict(
-            color=["#26a69a" if h else "#ef5350" for h in df_res_sorted["hit"]],
-            size=6, symbol="square",
-        ),
-        name="绿=命中, 红=未命中",
-        customdata=[
-            f"{d.strftime('%Y-%m-%d')}<br>{'✓ 命中' if h else '✗ 未命中'}<br>预测: {p*100:+.2f}% 实际: {a*100:+.2f}%"
-            for d, h, p, a in zip(df_res_sorted["date"], df_res_sorted["hit"],
-                                  df_res_sorted["pred_return"], df_res_sorted["actual_return"])
-        ],
-        hovertemplate="%{customdata}<extra></extra>",
-    ))
-    fig_tl.update_layout(
-        title="命中/未命中时间线 (每个方块 = 一次预测)",
-        height=120, yaxis=dict(showticklabels=False, range=[0.5, 1.5]),
-        margin=dict(l=20, r=20, t=30, b=20),
-    )
-    _plotly_chart(fig_tl, height=160)
-
-    # 月度命中率
-    df_res_sorted["month"] = df_res_sorted["date"].dt.to_period("M")
-    monthly = df_res_sorted.groupby("month").agg(
-        总数=("hit", "count"),
-        命中=("hit", "sum"),
-    )
-    monthly["命中率"] = (monthly["命中"] / monthly["总数"] * 100).round(1)
-    monthly.index = monthly.index.astype(str)
-
-    fig_monthly = go.Figure()
-    fig_monthly.add_trace(go.Bar(
-        x=monthly.index, y=monthly["总数"],
-        name="总数", marker_color="rgba(128,128,128,0.3)", yaxis="y",
-    ))
-    fig_monthly.add_trace(go.Scatter(
-        x=monthly.index, y=monthly["命中率"],
-        name="命中率%", mode="lines+markers",
-        line=dict(color="#1f77b4", width=2), yaxis="y2",
-    ))
-    # 50% 参考线 (画在 y2 命中率轴)
-    min_x = monthly.index[0] if len(monthly) > 0 else ""
-    max_x = monthly.index[-1] if len(monthly) > 0 else ""
-    fig_monthly.add_shape(type="line", x0=min_x, x1=max_x, y0=50, y1=50,
-                          line=dict(dash="dot", color="gray", width=1),
-                          yref="y2")
-    fig_monthly.update_layout(
-        title="逐月命中率",
-        yaxis=dict(title="预测次数", side="left"),
-        yaxis2=dict(title="命中率%", overlaying="y", side="right", range=[0, 100]),
-        height=300,
-        legend=dict(x=0.01, y=0.99),
-    )
-    _plotly_chart(fig_monthly, height=350)
-
-    # 如果数据足够, 加滚动命中率
-    if len(df_res_sorted) >= 30:
-        df_res_sorted["rolling_hit"] = df_res_sorted["hit"].rolling(30, min_periods=10).mean() * 100
-        fig_roll = go.Figure()
-        fig_roll.add_trace(go.Scatter(
-            x=df_res_sorted["date"], y=df_res_sorted["rolling_hit"],
-            mode="lines", name="30日滚动命中率%",
-            line=dict(color="#1f77b4", width=2),
-            fill="tozeroy", fillcolor="rgba(31,119,180,0.1)",
+        # 预测 vs 实际散点图
+        fig = go.Figure()
+        hover_texts = [
+            f"{d.strftime('%Y-%m-%d')}<br>预测: {p*100:+.2f}%<br>实际: {a*100:+.2f}%<br>匹配数: {m}"
+            for d, p, a, m in zip(df_res["date"], df_res["pred_return"],
+                                  df_res["actual_return"], df_res["matches"])
+        ]
+        fig.add_trace(go.Scatter(
+            x=df_res["pred_return"] * 100, y=df_res["actual_return"] * 100,
+            mode="markers",
+            marker=dict(
+                color=["#26a69a" if h else "#ef5350" for h in df_res["hit"]],
+                size=7, opacity=0.6,
+            ),
+            customdata=hover_texts,
+            hovertemplate="%{customdata}<extra></extra>",
+            name="绿=命中 红=未命中",
         ))
-        fig_roll.add_hline(y=50, line_dash="dot", line_color="gray")
-        fig_roll.update_layout(title="30 日滚动命中率", height=250)
-        _plotly_chart(fig_roll, height=300)
+        fig.add_hline(y=0, line_dash="dot", line_color="gray")
+        fig.add_vline(x=0, line_dash="dot", line_color="gray")
+        fig.update_layout(
+            title=f"预测 vs 实际 (命中率 {hit_rate:.1f}%, 绿=方向正确, 红=方向错误)",
+            xaxis_title="预测收益率 (%)", yaxis_title="实际收益率 (%)",
+            height=400,
+        )
+        _plotly_chart(fig, height=450)
 
-    # 详细结果表格
-    st.subheader("最近 30 次预测")
-    recent = df_res.tail(30).sort_values("date", ascending=False)
-    display = recent[["date", "top_r", "pred_return", "actual_return", "hit"]].copy()
-    display["date"] = display["date"].apply(lambda x: x.strftime("%Y-%m-%d"))
-    display["pred_return"] = (display["pred_return"] * 100).round(2)
-    display["actual_return"] = (display["actual_return"] * 100).round(2)
-    display["top_r"] = display["top_r"].round(4)
-    display.columns = ["日期", "最高r", "预测收益%", "实际收益%", "命中"]
-    st.dataframe(display, width='stretch', hide_index=True)
+        # 按预测方向分组的统计
+        st.subheader("按预测方向分组")
+        df_res["pred_dir"] = df_res["pred_return"].apply(
+            lambda x: "看涨" if x > 0.001 else ("看跌" if x < -0.001 else "中性")
+        )
+        dir_stats = df_res.groupby("pred_dir").agg(
+            次数=("hit", "count"),
+            命中率=("hit", lambda x: x.sum() / len(x) * 100),
+            平均实际收益=("actual_return", lambda x: np.mean(x) * 100),
+        ).round(1)
+        st.dataframe(dir_stats, width='stretch')
+
+        # ---- 时间分布 ----
+        st.subheader("命中/未命中 时间分布")
+
+        # 命中/未命中时间线
+        fig_tl = go.Figure()
+        fig_tl.add_trace(go.Scatter(
+            x=df_res_sorted["date"], y=[1] * len(df_res_sorted),
+            mode="markers",
+            marker=dict(
+                color=["#26a69a" if h else "#ef5350" for h in df_res_sorted["hit"]],
+                size=6, symbol="square",
+            ),
+            name="绿=命中, 红=未命中",
+            customdata=[
+                f"{d.strftime('%Y-%m-%d')}<br>{'✓ 命中' if h else '✗ 未命中'}<br>预测: {p*100:+.2f}% 实际: {a*100:+.2f}%"
+                for d, h, p, a in zip(df_res_sorted["date"], df_res_sorted["hit"],
+                                      df_res_sorted["pred_return"], df_res_sorted["actual_return"])
+            ],
+            hovertemplate="%{customdata}<extra></extra>",
+        ))
+        fig_tl.update_layout(
+            title="命中/未命中时间线 (每个方块 = 一次预测)",
+            height=120, yaxis=dict(showticklabels=False, range=[0.5, 1.5]),
+            margin=dict(l=20, r=20, t=30, b=20),
+        )
+        _plotly_chart(fig_tl, height=160)
+
+        # 月度命中率
+        df_res_sorted["month"] = df_res_sorted["date"].dt.to_period("M")
+        monthly = df_res_sorted.groupby("month").agg(
+            总数=("hit", "count"),
+            命中=("hit", "sum"),
+        )
+        monthly["命中率"] = (monthly["命中"] / monthly["总数"] * 100).round(1)
+        monthly.index = monthly.index.astype(str)
+
+        fig_monthly = go.Figure()
+        fig_monthly.add_trace(go.Bar(
+            x=monthly.index, y=monthly["总数"],
+            name="总数", marker_color="rgba(128,128,128,0.3)", yaxis="y",
+        ))
+        fig_monthly.add_trace(go.Scatter(
+            x=monthly.index, y=monthly["命中率"],
+            name="命中率%", mode="lines+markers",
+            line=dict(color="#1f77b4", width=2), yaxis="y2",
+        ))
+        # 50% 参考线 (画在 y2 命中率轴)
+        min_x = monthly.index[0] if len(monthly) > 0 else ""
+        max_x = monthly.index[-1] if len(monthly) > 0 else ""
+        fig_monthly.add_shape(type="line", x0=min_x, x1=max_x, y0=50, y1=50,
+                              line=dict(dash="dot", color="gray", width=1),
+                              yref="y2")
+        fig_monthly.update_layout(
+            title="逐月命中率",
+            yaxis=dict(title="预测次数", side="left"),
+            yaxis2=dict(title="命中率%", overlaying="y", side="right", range=[0, 100]),
+            height=300,
+            legend=dict(x=0.01, y=0.99),
+        )
+        _plotly_chart(fig_monthly, height=350)
+
+        # 如果数据足够, 加滚动命中率
+        if len(df_res_sorted) >= 30:
+            df_res_sorted["rolling_hit"] = df_res_sorted["hit"].rolling(30, min_periods=10).mean() * 100
+            fig_roll = go.Figure()
+            fig_roll.add_trace(go.Scatter(
+                x=df_res_sorted["date"], y=df_res_sorted["rolling_hit"],
+                mode="lines", name="30日滚动命中率%",
+                line=dict(color="#1f77b4", width=2),
+                fill="tozeroy", fillcolor="rgba(31,119,180,0.1)",
+            ))
+            fig_roll.add_hline(y=50, line_dash="dot", line_color="gray")
+            fig_roll.update_layout(title="30 日滚动命中率", height=250)
+            _plotly_chart(fig_roll, height=300)
+
+        # 详细结果表格
+        st.subheader("最近 30 次预测")
+        recent = df_res.tail(30).sort_values("date", ascending=False)
+        display = recent[["date", "top_r", "pred_return", "actual_return", "hit"]].copy()
+        display["date"] = display["date"].apply(lambda x: x.strftime("%Y-%m-%d"))
+        display["pred_return"] = (display["pred_return"] * 100).round(2)
+        display["actual_return"] = (display["actual_return"] * 100).round(2)
+        display["top_r"] = display["top_r"].round(4)
+        display.columns = ["日期", "最高r", "预测收益%", "实际收益%", "命中"]
+        st.dataframe(display, width='stretch', hide_index=True)
 
 
-    # ===========================================================================
-    # 自动调参 (独立于单次回测)
-    # ===========================================================================
-    if run_tune:
-        if not bt_factors:
-            st.warning("请选择匹配因子")
-        else:
-            valid_tune = df_factors[bt_factors].dropna()
-            n_tune = len(valid_tune)
-            # 使用 UI 日期范围, 与手动回测一致
-            bt_start_dt_t = pd.Timestamp(bt_start)
-            bt_end_dt_t = pd.Timestamp(bt_end)
-            tune_start = valid_tune.index.get_indexer([bt_start_dt_t], method="bfill")[0]
-            tune_end = valid_tune.index.get_indexer([bt_end_dt_t], method="ffill")[0] + 1
-            tune_start = max(tune_start, bt_window * 2)
-            tune_end = min(tune_end, n_tune - 10)
-
-            if tune_end - tune_start < 30:
-                st.warning("数据不足 (需要至少 30 个有效回测日)")
+        # ===========================================================================
+        # 自动调参 (独立于单次回测)
+        # ===========================================================================
+        if run_tune:
+            if not bt_factors:
+                st.warning("请选择匹配因子")
             else:
-                windows = [5, 10, 20, 30]
-                lookaheads = [3, 5, 10, 15]
-                thresholds = [0.7, 0.8, 0.85, 0.9, 0.95]
-                topks = [1, 3, 5]
+                valid_tune = df_factors[bt_factors].dropna()
+                n_tune = len(valid_tune)
+                # 使用 UI 日期范围, 与手动回测一致
+                bt_start_dt_t = pd.Timestamp(bt_start)
+                bt_end_dt_t = pd.Timestamp(bt_end)
+                tune_start = valid_tune.index.get_indexer([bt_start_dt_t], method="bfill")[0]
+                tune_end = valid_tune.index.get_indexer([bt_end_dt_t], method="ffill")[0] + 1
+                tune_start = max(tune_start, bt_window * 2)
+                tune_end = min(tune_end, n_tune - 10)
 
-                total_trials = len(windows) * len(lookaheads) * len(thresholds) * len(topks)
-                algo_label = {"pearson": "Pearson", "dtw": "DTW", "pearson_dtw": "Pearson+DTW"}.get(bt_algo, bt_algo)
-                st.caption(f"算法: {algo_label} | 搜索 {total_trials} 种参数组合...")
-
-                tune_results = []
-                tune_progress = st.progress(0)
-                trial_idx = 0
-                price_vals_t = df_factors.loc[valid_tune.index, "close"].values
-
-                for win in windows:
-                    vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                    # 预计算 Pearson 矩阵
-                    combined_corr = np.zeros((n_tune - win + 1, n_tune - win + 1))
-                    for factor in bt_factors:
-                        vals = vals_dict_t[factor]
-                        W = np.lib.stride_tricks.sliding_window_view(vals, win)
-                        mean = W.mean(axis=1, keepdims=True)
-                        std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
-                        Wz = (W - mean) / std
-                        combined_corr += (Wz @ Wz.T) / (win - 1) * (1.0 / len(bt_factors))
-
-                    for la in lookaheads:
-                        for th in thresholds:
-                            for tk in topks:
-                                results_t = []
-                                s_start = max(tune_start, win * 2)
-                                s_end = min(tune_end, n_tune - la)
-                                for t in range(s_start, s_end):
-                                    tpl_idx = t - win
-                                    hist_end = tpl_idx - win
-                                    if hist_end >= 0:
-                                        row = combined_corr[tpl_idx, :hist_end + 1]
-                                        # Pearson 宽松初筛, 最终阈值由 DTW/Pearson 决定
-                                        loose_mask = (row + 1) / 2 >= 0.65  # r >= 0.3, 与手动回测一致
-                                        if loose_mask.any():
-                                            if bt_algo in ("dtw", "pearson_dtw"):
-                                                # DTW 模式: Pearson 初筛 → DTW 筛选+排名
-                                                dtw_scores = []
-                                                for mi in np.where(loose_mask)[0]:
-                                                    dtw_sim = 0.0
-                                                    for f in bt_factors:
-                                                        tpl_v = vals_dict_t[f][t - win:t]
-                                                        win_v = vals_dict_t[f][mi:mi + win]
-                                                        s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
-                                                        if not np.isnan(s):
-                                                            dtw_sim += s
-                                                    dtw_sim /= len(bt_factors)
-                                                    if dtw_sim >= th:
-                                                        dtw_scores.append((mi, dtw_sim))
-                                                if dtw_scores:
-                                                    dtw_scores.sort(key=lambda x: -x[1])
-                                                    top_k_idx = [x[0] for x in dtw_scores[:tk]]
-                                                else:
-                                                    continue
-                                            else:
-                                                row_sim = (row + 1) / 2
-                                                match_idx = np.where(row_sim >= th)[0]
-                                                top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
-
-                                        pred_rets = []
-                                        for s_idx in top_k_idx:
-                                            s_end_pos = s_idx + win - 1
-                                            if s_end_pos + 1 + la <= n_tune:
-                                                fut_s = price_vals_t[s_end_pos + 1]
-                                                fut_e = price_vals_t[s_end_pos + la]
-                                                pred_rets.append((fut_e - fut_s) / fut_s)
-                                        if pred_rets:
-                                            avg_pred = np.mean(pred_rets)
-                                            act_s = price_vals_t[t]
-                                            act_e = price_vals_t[t + la - 1]
-                                            act_ret = (act_e - act_s) / act_s
-                                            hit = (avg_pred > 0 and act_ret > 0) or (avg_pred < 0 and act_ret < 0) or \
-                                                      (abs(avg_pred) < 0.001 and abs(act_ret) < 0.001)
-                                            results_t.append({
-                                                "pred_return": avg_pred,
-                                                "actual_return": act_ret,
-                                                "hit": hit,
-                                            })
-
-                                if results_t:
-                                    df_t = pd.DataFrame(results_t)
-                                    df_t["pred_sign"] = np.sign(df_t["pred_return"].fillna(0))
-                                    df_t["seg"] = (df_t["pred_sign"] != df_t["pred_sign"].shift(1)).cumsum()
-                                    segs = df_t.groupby("seg")
-                                    seg_total = len(segs)
-                                    seg_hit = sum(1 for _, g in segs if g["hit"].sum() > len(g) / 2)
-                                    seg_rate = seg_hit / seg_total * 100 if seg_total > 0 else 0
-                                    raw_rate = df_t["hit"].sum() / len(df_t) * 100
-
-                                    tune_results.append({
-                                        "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
-                                        "信号段数": seg_total, "命中段数": seg_hit,
-                                        "段命中率%": round(seg_rate, 1),
-                                        "原始命中率%": round(raw_rate, 1),
-                                        "回测天数": len(df_t),
-                                    })
-
-                                trial_idx += 1
-                                tune_progress.progress(trial_idx / total_trials)
-
-                if tune_results:
-                    df_tune = pd.DataFrame(tune_results)
-                    df_tune = df_tune.sort_values("段命中率%", ascending=False)
-
-                    st.subheader("🏆 最优参数 Top 15")
-                    st.dataframe(
-                        df_tune.head(15),
-                        width='stretch',
-                        hide_index=True,
-                        column_config={
-                            "段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                            "原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                        }
-                    )
+                if tune_end - tune_start < 30:
+                    st.warning("数据不足 (需要至少 30 个有效回测日)")
                 else:
-                    st.warning("未找到任何有效参数组合")
+                    windows = [5, 10, 20, 30]
+                    lookaheads = [3, 5, 10, 15]
+                    thresholds = [0.7, 0.8, 0.85, 0.9, 0.95]
+                    topks = [1, 3, 5]
+
+                    total_trials = len(windows) * len(lookaheads) * len(thresholds) * len(topks)
+                    algo_label = {"pearson": "Pearson", "dtw": "DTW", "pearson_dtw": "Pearson+DTW"}.get(bt_algo, bt_algo)
+                    st.caption(f"算法: {algo_label} | 搜索 {total_trials} 种参数组合...")
+
+                    tune_results = []
+                    tune_progress = st.progress(0)
+                    trial_idx = 0
+                    price_vals_t = df_factors.loc[valid_tune.index, "close"].values
+
+                    for win in windows:
+                        vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
+                        # 预计算 Pearson 矩阵
+                        combined_corr = np.zeros((n_tune - win + 1, n_tune - win + 1))
+                        for factor in bt_factors:
+                            vals = vals_dict_t[factor]
+                            W = np.lib.stride_tricks.sliding_window_view(vals, win)
+                            mean = W.mean(axis=1, keepdims=True)
+                            std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
+                            Wz = (W - mean) / std
+                            combined_corr += (Wz @ Wz.T) / (win - 1) * (1.0 / len(bt_factors))
+
+                        for la in lookaheads:
+                            for th in thresholds:
+                                for tk in topks:
+                                    results_t = []
+                                    s_start = max(tune_start, win * 2)
+                                    s_end = min(tune_end, n_tune - la)
+                                    for t in range(s_start, s_end):
+                                        tpl_idx = t - win
+                                        hist_end = tpl_idx - win
+                                        if hist_end >= 0:
+                                            row = combined_corr[tpl_idx, :hist_end + 1]
+                                            # Pearson 宽松初筛, 最终阈值由 DTW/Pearson 决定
+                                            loose_mask = (row + 1) / 2 >= 0.65  # r >= 0.3, 与手动回测一致
+                                            if loose_mask.any():
+                                                if bt_algo in ("dtw", "pearson_dtw"):
+                                                    # DTW 模式: Pearson 初筛 → DTW 筛选+排名
+                                                    dtw_scores = []
+                                                    for mi in np.where(loose_mask)[0]:
+                                                        dtw_sim = 0.0
+                                                        for f in bt_factors:
+                                                            tpl_v = vals_dict_t[f][t - win:t]
+                                                            win_v = vals_dict_t[f][mi:mi + win]
+                                                            s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
+                                                            if not np.isnan(s):
+                                                                dtw_sim += s
+                                                        dtw_sim /= len(bt_factors)
+                                                        if dtw_sim >= th:
+                                                            dtw_scores.append((mi, dtw_sim))
+                                                    if dtw_scores:
+                                                        dtw_scores.sort(key=lambda x: -x[1])
+                                                        top_k_idx = [x[0] for x in dtw_scores[:tk]]
+                                                    else:
+                                                        continue
+                                                else:
+                                                    row_sim = (row + 1) / 2
+                                                    match_idx = np.where(row_sim >= th)[0]
+                                                    top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
+
+                                            pred_rets = []
+                                            for s_idx in top_k_idx:
+                                                s_end_pos = s_idx + win - 1
+                                                if s_end_pos + 1 + la <= n_tune:
+                                                    fut_s = price_vals_t[s_end_pos + 1]
+                                                    fut_e = price_vals_t[s_end_pos + la]
+                                                    pred_rets.append((fut_e - fut_s) / fut_s)
+                                            if pred_rets:
+                                                avg_pred = np.mean(pred_rets)
+                                                act_s = price_vals_t[t]
+                                                act_e = price_vals_t[t + la - 1]
+                                                act_ret = (act_e - act_s) / act_s
+                                                hit = (avg_pred > 0 and act_ret > 0) or (avg_pred < 0 and act_ret < 0) or \
+                                                          (abs(avg_pred) < 0.001 and abs(act_ret) < 0.001)
+                                                results_t.append({
+                                                    "pred_return": avg_pred,
+                                                    "actual_return": act_ret,
+                                                    "hit": hit,
+                                                })
+
+                                    if results_t:
+                                        df_t = pd.DataFrame(results_t)
+                                        df_t["pred_sign"] = np.sign(df_t["pred_return"].fillna(0))
+                                        df_t["seg"] = (df_t["pred_sign"] != df_t["pred_sign"].shift(1)).cumsum()
+                                        segs = df_t.groupby("seg")
+                                        seg_total = len(segs)
+                                        seg_hit = sum(1 for _, g in segs if g["hit"].sum() > len(g) / 2)
+                                        seg_rate = seg_hit / seg_total * 100 if seg_total > 0 else 0
+                                        raw_rate = df_t["hit"].sum() / len(df_t) * 100
+
+                                        tune_results.append({
+                                            "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
+                                            "信号段数": seg_total, "命中段数": seg_hit,
+                                            "段命中率%": round(seg_rate, 1),
+                                            "原始命中率%": round(raw_rate, 1),
+                                            "回测天数": len(df_t),
+                                        })
+
+                                    trial_idx += 1
+                                    tune_progress.progress(trial_idx / total_trials)
+
+                    if tune_results:
+                        df_tune = pd.DataFrame(tune_results)
+                        df_tune = df_tune.sort_values("段命中率%", ascending=False)
+
+                        st.subheader("🏆 最优参数 Top 15")
+                        st.dataframe(
+                            df_tune.head(15),
+                            width='stretch',
+                            hide_index=True,
+                            column_config={
+                                "段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                "原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                            }
+                        )
+                    else:
+                        st.warning("未找到任何有效参数组合")
 # Tab 8: 数据表格
 # ===========================================================================
 if tab_idx == 8:
