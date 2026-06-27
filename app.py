@@ -172,7 +172,9 @@ FACTOR_PRESETS = {
     "多维度": ["close", "vol_ratio", "j"],
     "纯技术": ["rsi14", "j", "vol_ratio"],
     "估值+价": ["close", "pe_ttm"],
-    "形态信号": ["sig_macross", "sig_rsizone", "sig_volbreak"],
+    "信号+价": ["close", "sig_rsizone", "sig_volbreak"],
+    "纯信号": ["sig_macross", "sig_rsizone", "sig_volbreak"],
+    "全信号+价": ["close", "sig_macross", "sig_rsizone", "sig_volbreak"],
 }
 SIGNAL_FACTORS = ["sig_macross", "sig_rsizone", "sig_volbreak", "sig_macd", "sig_bbsqueeze"]
 
