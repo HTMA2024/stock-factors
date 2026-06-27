@@ -942,11 +942,14 @@ if tab_idx == 6:
 if tab_idx == 7:
     st.caption("逐日回测: 每一天生成模板 → 匹配历史 → 记录预测 vs 实际, 计算命中率")
 
-    # 匹配因子池 (与形态匹配共用)
-    bt_factors_pool = [c for c in df_factors.columns if c not in
-                       ["open", "high", "low", "volume", "amount", "turnover",
-                        "pct_change", "dif", "dea", "macd"] +
-                       [c for c in df_factors.columns if c.startswith("bb_") and c not in ["bb_pct_b"]]]
+    # 匹配因子池
+    bt_pool_base = [c for c in df_factors.columns if c not in
+                    ["open", "high", "low", "volume", "amount", "turnover",
+                     "pct_change", "dif", "dea", "macd"] + signal_factors +
+                    [c for c in df_factors.columns if c.startswith("bb_") and c not in ["bb_pct_b"]]]
+    show_signals_bt = st.toggle("包含技术形态信号", key="show_sig_bt",
+                                help="金叉/死叉, RSI超买超卖, 放量, MACD交叉, 布林挤压")
+    bt_factors_pool = bt_pool_base + (signal_factors if show_signals_bt else [])
 
     # ---- 滑动条 ----
     st.caption("参数设置")
