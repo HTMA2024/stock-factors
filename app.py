@@ -663,10 +663,9 @@ if tab_idx == 6:
     signal_factors = ["sig_macross", "sig_rsizone", "sig_volbreak", "sig_macd", "sig_bbsqueeze"]
     matchable_base = [c for c in df_factors.columns if c not in
                       ["open", "high", "low", "volume", "amount", "turnover",
-                       "pct_change", "dif", "dea", "macd"] + SIGNAL_FACTORS +
+                       "pct_change", "dif", "dea", "macd"] +
                       [c for c in df_factors.columns if c.startswith("bb_") and c not in ["bb_pct_b"]]]
-    show_signals = st.toggle("包含技术形态信号", key="show_sig_match")
-    matchable_factors = matchable_base + (SIGNAL_FACTORS if show_signals else [])
+    matchable_factors = matchable_base
     default_match = ["close", "pe_ttm", "pb", "rsi14"]
 
     # 快捷预设
