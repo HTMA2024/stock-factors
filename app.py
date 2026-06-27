@@ -1608,7 +1608,7 @@ if tab_idx == 7:
                         results_t = []
                         # Bug A+B fix: ensemble 模式下 horizon 固定为 10, 评估用 5
                         la_eff = 10 if ensemble_mode else la
-                        la_eval = 5 if ensemble_mode else la
+                        la_eval = 10 if ensemble_mode else la
                         s_start = max(eval_start, win * 2)
                         s_end = min(eval_end, n_tune - la_eff)
                         # 择时过滤阈值
