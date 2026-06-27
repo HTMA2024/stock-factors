@@ -1124,6 +1124,10 @@ if tab_idx == 7:
                         res = []
                         edays = eval_end - eval_start
                         for ti, t in enumerate(range(eval_start, eval_end)):
+                            # 择时过滤
+                            if timing_filter and vol_thresh is not None:
+                                if vol_data.iloc[t] > vol_thresh:
+                                    continue
                             tpl_vals = {f: vals_dict[f][t - win:t] for f in bt_factors}
                             scores = []
                             for s in range(win, t - win + 1):
@@ -1334,17 +1338,32 @@ if tab_idx == 7:
             train_seg_total = len(train_segs)
             train_seg_hits = sum(1 for _, g in train_segs if g["hit"].sum() > len(g) / 2)
             train_seg_rate = train_seg_hits / train_seg_total * 100 if train_seg_total > 0 else 0
+            train_seg_avg_days = train_segs.agg(days=("date", "count"))["days"].mean() if train_seg_total > 0 else 0
 
-            tsc1, tsc2, tsc3, tsc4 = st.columns(4)
-            with tsc1:
+            test_seg_avg_days = segments["持续天数"].mean() if seg_total > 0 else 0
+
+            # 第一行: 训练段
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
                 st.metric("训练段命中率", f"{train_seg_rate:.1f}%")
-            with tsc2:
-                st.metric("训练段数", train_seg_total)
-            with tsc3:
+            with c2:
+                st.metric("训练信号段数", train_seg_total)
+            with c3:
+                st.metric("训练命中段数", train_seg_hits)
+            with c4:
+                st.metric("训练段均天数", f"{train_seg_avg_days:.1f}")
+
+            # 第二行: 测试段
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
                 st.metric("测试段命中率", f"{seg_hitrate:.1f}%",
                           delta=f"{seg_hitrate - train_seg_rate:+.1f}% vs 训练")
-            with tsc4:
-                st.metric("测试段数", seg_total)
+            with c2:
+                st.metric("测试信号段数", seg_total)
+            with c3:
+                st.metric("测试命中段数", seg_hits)
+            with c4:
+                st.metric("测试段均天数", f"{test_seg_avg_days:.1f}")
         else:
             sc1, sc2, sc3, sc4 = st.columns(4)
             with sc1:
