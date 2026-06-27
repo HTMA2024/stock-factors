@@ -1048,8 +1048,6 @@ if tab_idx == 7:
                     price_vals = df_factors.loc[valid_bt.index, "close"].values
                     win = bt_window
 
-                    full_start = start_idx  # 记住原始起始位, walk-forward 时需要
-
                     def _run_bt_fast(eval_start, eval_end, combined_corr):
                         res = []
                         edays = eval_end - eval_start
