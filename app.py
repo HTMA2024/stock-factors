@@ -1167,200 +1167,189 @@ if tab_idx == 7:
                                         "hit": hit,
                                 })
                                 progress_bar.progress((ti + 1) / total_days)
-
-                    # ---- 展示结果 ----
                     if not results:
                         st.info(f"未找到任何满足阈值 {bt_threshold} 的匹配, 尝试降低阈值")
                         st.session_state.bt_results = None
                     else:
                         st.session_state.bt_results = results  # 持久化, 参数变动不清空
-                        df_res = pd.DataFrame(results)
-                        total = len(df_res)
-                        hits = df_res["hit"].sum()
-                        hit_rate = hits / total * 100
 
-                        # 指标卡片 (原始)
-                        mc1, mc2, mc3, mc4 = st.columns(4)
-                        with mc1:
-                            st.metric("回测天数", total)
-                        with mc2:
-                            st.metric("命中次数", hits)
-                        with mc3:
-                            st.metric("方向命中率", f"{hit_rate:.1f}%")
-                        with mc4:
-                            avg_matches = df_res["matches"].mean()
-                            st.metric("日均匹配数", f"{avg_matches:.1f}")
 
-                        # ---- 去重叠统计 ----
-                        df_res_sorted = df_res.sort_values("date")
-                        df_res_sorted["pred_sign"] = np.sign(df_res_sorted["pred_return"].fillna(0))
-                        # 标记方向切换点 (相邻两天预测方向不同 = 新信号段)
-                        df_res_sorted["segment"] = (df_res_sorted["pred_sign"] != df_res_sorted["pred_sign"].shift(1)).cumsum()
-                        segments = df_res_sorted.groupby("segment").agg(
-                            起始日期=("date", "first"),
-                            结束日期=("date", "last"),
-                            持续天数=("date", "count"),
-                            预测方向=("pred_sign", "first"),
-                            命中天数=("hit", "sum"),
-                            平均预测收益=("pred_return", "mean"),
-                            平均实际收益=("actual_return", "mean"),
-                        )
-                        segments["预测方向"] = segments["预测方向"].map({1: "看涨", -1: "看跌", 0: "中性"})
-                        seg_total = len(segments)
-                        seg_hits = (segments["命中天数"] > segments["持续天数"] / 2).sum()
-                        seg_hitrate = seg_hits / seg_total * 100 if seg_total > 0 else 0
-
-                        st.divider()
-                        st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段, 段内过半命中才算正确")
-                        sc1, sc2, sc3, sc4 = st.columns(4)
-                        with sc1:
-                            st.metric("信号段数", seg_total)
-                        with sc2:
-                            st.metric("命中段数", seg_hits)
-                        with sc3:
-                            st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
-                                      delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始")
-                        with sc4:
-                            st.metric("段均天数", f"{segments['持续天数'].mean():.1f}" if seg_total > 0 else "-")
-
-                        # 预测 vs 实际散点图
-                        fig = go.Figure()
-                        hover_texts = [
-                            f"{d.strftime('%Y-%m-%d')}<br>预测: {p*100:+.2f}%<br>实际: {a*100:+.2f}%<br>匹配数: {m}"
-                            for d, p, a, m in zip(df_res["date"], df_res["pred_return"],
-                                                  df_res["actual_return"], df_res["matches"])
-                        ]
-                        fig.add_trace(go.Scatter(
-                            x=df_res["pred_return"] * 100, y=df_res["actual_return"] * 100,
-                            mode="markers",
-                            marker=dict(
-                                color=["#26a69a" if h else "#ef5350" for h in df_res["hit"]],
-                                size=7, opacity=0.6,
-                            ),
-                            customdata=hover_texts,
-                            hovertemplate="%{customdata}<extra></extra>",
-                            name="绿=命中 红=未命中",
-                        ))
-                        fig.add_hline(y=0, line_dash="dot", line_color="gray")
-                        fig.add_vline(x=0, line_dash="dot", line_color="gray")
-                        fig.update_layout(
-                            title=f"预测 vs 实际 (命中率 {hit_rate:.1f}%, 绿=方向正确, 红=方向错误)",
-                            xaxis_title="预测收益率 (%)", yaxis_title="实际收益率 (%)",
-                            height=400,
-                        )
-                        _plotly_chart(fig, height=450)
-
-                        # 按预测方向分组的统计
-                        st.subheader("按预测方向分组")
-                        df_res["pred_dir"] = df_res["pred_return"].apply(
-                            lambda x: "看涨" if x > 0.001 else ("看跌" if x < -0.001 else "中性")
-                        )
-                        dir_stats = df_res.groupby("pred_dir").agg(
-                            次数=("hit", "count"),
-                            命中率=("hit", lambda x: x.sum() / len(x) * 100),
-                            平均实际收益=("actual_return", lambda x: np.mean(x) * 100),
-                        ).round(1)
-                        st.dataframe(dir_stats, width='stretch')
-
-                        # ---- 时间分布 ----
-                        st.subheader("命中/未命中 时间分布")
-
-                        # 命中/未命中时间线
-                        fig_tl = go.Figure()
-                        fig_tl.add_trace(go.Scatter(
-                            x=df_res_sorted["date"], y=[1] * len(df_res_sorted),
-                            mode="markers",
-                            marker=dict(
-                                color=["#26a69a" if h else "#ef5350" for h in df_res_sorted["hit"]],
-                                size=6, symbol="square",
-                            ),
-                            name="绿=命中, 红=未命中",
-                            customdata=[
-                                f"{d.strftime('%Y-%m-%d')}<br>{'✓ 命中' if h else '✗ 未命中'}<br>预测: {p*100:+.2f}% 实际: {a*100:+.2f}%"
-                                for d, h, p, a in zip(df_res_sorted["date"], df_res_sorted["hit"],
-                                                      df_res_sorted["pred_return"], df_res_sorted["actual_return"])
-                            ],
-                            hovertemplate="%{customdata}<extra></extra>",
-                        ))
-                        fig_tl.update_layout(
-                            title="命中/未命中时间线 (每个方块 = 一次预测)",
-                            height=120, yaxis=dict(showticklabels=False, range=[0.5, 1.5]),
-                            margin=dict(l=20, r=20, t=30, b=20),
-                        )
-                        _plotly_chart(fig_tl, height=160)
-
-                        # 月度命中率
-                        df_res_sorted["month"] = df_res_sorted["date"].dt.to_period("M")
-                        monthly = df_res_sorted.groupby("month").agg(
-                            总数=("hit", "count"),
-                            命中=("hit", "sum"),
-                        )
-                        monthly["命中率"] = (monthly["命中"] / monthly["总数"] * 100).round(1)
-                        monthly.index = monthly.index.astype(str)
-
-                        fig_monthly = go.Figure()
-                        fig_monthly.add_trace(go.Bar(
-                            x=monthly.index, y=monthly["总数"],
-                            name="总数", marker_color="rgba(128,128,128,0.3)", yaxis="y",
-                        ))
-                        fig_monthly.add_trace(go.Scatter(
-                            x=monthly.index, y=monthly["命中率"],
-                            name="命中率%", mode="lines+markers",
-                            line=dict(color="#1f77b4", width=2), yaxis="y2",
-                        ))
-                        # 50% 参考线 (画在 y2 命中率轴)
-                        min_x = monthly.index[0] if len(monthly) > 0 else ""
-                        max_x = monthly.index[-1] if len(monthly) > 0 else ""
-                        fig_monthly.add_shape(type="line", x0=min_x, x1=max_x, y0=50, y1=50,
-                                              line=dict(dash="dot", color="gray", width=1),
-                                              yref="y2")
-                        fig_monthly.update_layout(
-                            title="逐月命中率",
-                            yaxis=dict(title="预测次数", side="left"),
-                            yaxis2=dict(title="命中率%", overlaying="y", side="right", range=[0, 100]),
-                            height=300,
-                            legend=dict(x=0.01, y=0.99),
-                        )
-                        _plotly_chart(fig_monthly, height=350)
-
-                        # 如果数据足够, 加滚动命中率
-                        if len(df_res_sorted) >= 30:
-                            df_res_sorted["rolling_hit"] = df_res_sorted["hit"].rolling(30, min_periods=10).mean() * 100
-                            fig_roll = go.Figure()
-                            fig_roll.add_trace(go.Scatter(
-                                x=df_res_sorted["date"], y=df_res_sorted["rolling_hit"],
-                                mode="lines", name="30日滚动命中率%",
-                                line=dict(color="#1f77b4", width=2),
-                                fill="tozeroy", fillcolor="rgba(31,119,180,0.1)",
-                            ))
-                            fig_roll.add_hline(y=50, line_dash="dot", line_color="gray")
-                            fig_roll.update_layout(title="30 日滚动命中率", height=250)
-                            _plotly_chart(fig_roll, height=300)
-
-                        # 详细结果表格
-                        st.subheader("最近 30 次预测")
-                        recent = df_res.tail(30).sort_values("date", ascending=False)
-                        display = recent[["date", "top_r", "pred_return", "actual_return", "hit"]].copy()
-                        display["date"] = display["date"].apply(lambda x: x.strftime("%Y-%m-%d"))
-                        display["pred_return"] = (display["pred_return"] * 100).round(2)
-                        display["actual_return"] = (display["actual_return"] * 100).round(2)
-                        display["top_r"] = display["top_r"].round(4)
-                        display.columns = ["日期", "最高r", "预测收益%", "实际收益%", "命中"]
-                        st.dataframe(display, width='stretch', hide_index=True)
-
-# ---- 缓存结果展示 (参数变动不清空) ----
-if "bt_results" in st.session_state and st.session_state.bt_results is not None and not run_bt:
+# ---- 回测结果展示 (从缓存读取, 参数变动不清空) ----
+if "bt_results" in st.session_state and st.session_state.bt_results is not None:
     df_res = pd.DataFrame(st.session_state.bt_results)
+    df_res = pd.DataFrame(results)
     total = len(df_res)
     hits = df_res["hit"].sum()
     hit_rate = hits / total * 100
 
-    st.caption("📋 上次回测结果 (参数已缓存, 修改参数后仍需点'开始回测'更新)")
+    # 指标卡片 (原始)
     mc1, mc2, mc3, mc4 = st.columns(4)
-    with mc1: st.metric("回测天数", total)
-    with mc2: st.metric("命中次数", hits)
-    with mc3: st.metric("方向命中率", f"{hit_rate:.1f}%")
-    with mc4: pass
+    with mc1:
+        st.metric("回测天数", total)
+    with mc2:
+        st.metric("命中次数", hits)
+    with mc3:
+        st.metric("方向命中率", f"{hit_rate:.1f}%")
+    with mc4:
+        avg_matches = df_res["matches"].mean()
+        st.metric("日均匹配数", f"{avg_matches:.1f}")
+
+    # ---- 去重叠统计 ----
+    df_res_sorted = df_res.sort_values("date")
+    df_res_sorted["pred_sign"] = np.sign(df_res_sorted["pred_return"].fillna(0))
+    # 标记方向切换点 (相邻两天预测方向不同 = 新信号段)
+    df_res_sorted["segment"] = (df_res_sorted["pred_sign"] != df_res_sorted["pred_sign"].shift(1)).cumsum()
+    segments = df_res_sorted.groupby("segment").agg(
+        起始日期=("date", "first"),
+        结束日期=("date", "last"),
+        持续天数=("date", "count"),
+        预测方向=("pred_sign", "first"),
+        命中天数=("hit", "sum"),
+        平均预测收益=("pred_return", "mean"),
+        平均实际收益=("actual_return", "mean"),
+    )
+    segments["预测方向"] = segments["预测方向"].map({1: "看涨", -1: "看跌", 0: "中性"})
+    seg_total = len(segments)
+    seg_hits = (segments["命中天数"] > segments["持续天数"] / 2).sum()
+    seg_hitrate = seg_hits / seg_total * 100 if seg_total > 0 else 0
+
+    st.divider()
+    st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段, 段内过半命中才算正确")
+    sc1, sc2, sc3, sc4 = st.columns(4)
+    with sc1:
+        st.metric("信号段数", seg_total)
+    with sc2:
+        st.metric("命中段数", seg_hits)
+    with sc3:
+        st.metric("去重叠命中率", f"{seg_hitrate:.1f}%",
+                  delta=f"{seg_hitrate - hit_rate:+.1f}% vs 原始")
+    with sc4:
+        st.metric("段均天数", f"{segments['持续天数'].mean():.1f}" if seg_total > 0 else "-")
+
+    # 预测 vs 实际散点图
+    fig = go.Figure()
+    hover_texts = [
+        f"{d.strftime('%Y-%m-%d')}<br>预测: {p*100:+.2f}%<br>实际: {a*100:+.2f}%<br>匹配数: {m}"
+        for d, p, a, m in zip(df_res["date"], df_res["pred_return"],
+                              df_res["actual_return"], df_res["matches"])
+    ]
+    fig.add_trace(go.Scatter(
+        x=df_res["pred_return"] * 100, y=df_res["actual_return"] * 100,
+        mode="markers",
+        marker=dict(
+            color=["#26a69a" if h else "#ef5350" for h in df_res["hit"]],
+            size=7, opacity=0.6,
+        ),
+        customdata=hover_texts,
+        hovertemplate="%{customdata}<extra></extra>",
+        name="绿=命中 红=未命中",
+    ))
+    fig.add_hline(y=0, line_dash="dot", line_color="gray")
+    fig.add_vline(x=0, line_dash="dot", line_color="gray")
+    fig.update_layout(
+        title=f"预测 vs 实际 (命中率 {hit_rate:.1f}%, 绿=方向正确, 红=方向错误)",
+        xaxis_title="预测收益率 (%)", yaxis_title="实际收益率 (%)",
+        height=400,
+    )
+    _plotly_chart(fig, height=450)
+
+    # 按预测方向分组的统计
+    st.subheader("按预测方向分组")
+    df_res["pred_dir"] = df_res["pred_return"].apply(
+        lambda x: "看涨" if x > 0.001 else ("看跌" if x < -0.001 else "中性")
+    )
+    dir_stats = df_res.groupby("pred_dir").agg(
+        次数=("hit", "count"),
+        命中率=("hit", lambda x: x.sum() / len(x) * 100),
+        平均实际收益=("actual_return", lambda x: np.mean(x) * 100),
+    ).round(1)
+    st.dataframe(dir_stats, width='stretch')
+
+    # ---- 时间分布 ----
+    st.subheader("命中/未命中 时间分布")
+
+    # 命中/未命中时间线
+    fig_tl = go.Figure()
+    fig_tl.add_trace(go.Scatter(
+        x=df_res_sorted["date"], y=[1] * len(df_res_sorted),
+        mode="markers",
+        marker=dict(
+            color=["#26a69a" if h else "#ef5350" for h in df_res_sorted["hit"]],
+            size=6, symbol="square",
+        ),
+        name="绿=命中, 红=未命中",
+        customdata=[
+            f"{d.strftime('%Y-%m-%d')}<br>{'✓ 命中' if h else '✗ 未命中'}<br>预测: {p*100:+.2f}% 实际: {a*100:+.2f}%"
+            for d, h, p, a in zip(df_res_sorted["date"], df_res_sorted["hit"],
+                                  df_res_sorted["pred_return"], df_res_sorted["actual_return"])
+        ],
+        hovertemplate="%{customdata}<extra></extra>",
+    ))
+    fig_tl.update_layout(
+        title="命中/未命中时间线 (每个方块 = 一次预测)",
+        height=120, yaxis=dict(showticklabels=False, range=[0.5, 1.5]),
+        margin=dict(l=20, r=20, t=30, b=20),
+    )
+    _plotly_chart(fig_tl, height=160)
+
+    # 月度命中率
+    df_res_sorted["month"] = df_res_sorted["date"].dt.to_period("M")
+    monthly = df_res_sorted.groupby("month").agg(
+        总数=("hit", "count"),
+        命中=("hit", "sum"),
+    )
+    monthly["命中率"] = (monthly["命中"] / monthly["总数"] * 100).round(1)
+    monthly.index = monthly.index.astype(str)
+
+    fig_monthly = go.Figure()
+    fig_monthly.add_trace(go.Bar(
+        x=monthly.index, y=monthly["总数"],
+        name="总数", marker_color="rgba(128,128,128,0.3)", yaxis="y",
+    ))
+    fig_monthly.add_trace(go.Scatter(
+        x=monthly.index, y=monthly["命中率"],
+        name="命中率%", mode="lines+markers",
+        line=dict(color="#1f77b4", width=2), yaxis="y2",
+    ))
+    # 50% 参考线 (画在 y2 命中率轴)
+    min_x = monthly.index[0] if len(monthly) > 0 else ""
+    max_x = monthly.index[-1] if len(monthly) > 0 else ""
+    fig_monthly.add_shape(type="line", x0=min_x, x1=max_x, y0=50, y1=50,
+                          line=dict(dash="dot", color="gray", width=1),
+                          yref="y2")
+    fig_monthly.update_layout(
+        title="逐月命中率",
+        yaxis=dict(title="预测次数", side="left"),
+        yaxis2=dict(title="命中率%", overlaying="y", side="right", range=[0, 100]),
+        height=300,
+        legend=dict(x=0.01, y=0.99),
+    )
+    _plotly_chart(fig_monthly, height=350)
+
+    # 如果数据足够, 加滚动命中率
+    if len(df_res_sorted) >= 30:
+        df_res_sorted["rolling_hit"] = df_res_sorted["hit"].rolling(30, min_periods=10).mean() * 100
+        fig_roll = go.Figure()
+        fig_roll.add_trace(go.Scatter(
+            x=df_res_sorted["date"], y=df_res_sorted["rolling_hit"],
+            mode="lines", name="30日滚动命中率%",
+            line=dict(color="#1f77b4", width=2),
+            fill="tozeroy", fillcolor="rgba(31,119,180,0.1)",
+        ))
+        fig_roll.add_hline(y=50, line_dash="dot", line_color="gray")
+        fig_roll.update_layout(title="30 日滚动命中率", height=250)
+        _plotly_chart(fig_roll, height=300)
+
+    # 详细结果表格
+    st.subheader("最近 30 次预测")
+    recent = df_res.tail(30).sort_values("date", ascending=False)
+    display = recent[["date", "top_r", "pred_return", "actual_return", "hit"]].copy()
+    display["date"] = display["date"].apply(lambda x: x.strftime("%Y-%m-%d"))
+    display["pred_return"] = (display["pred_return"] * 100).round(2)
+    display["actual_return"] = (display["actual_return"] * 100).round(2)
+    display["top_r"] = display["top_r"].round(4)
+    display.columns = ["日期", "最高r", "预测收益%", "实际收益%", "命中"]
+    st.dataframe(display, width='stretch', hide_index=True)
 
 
     # ===========================================================================
