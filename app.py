@@ -1398,7 +1398,7 @@ if tab_idx == 7:
                                     if hist_end >= 0:
                                         row = combined_corr[tpl_idx, :hist_end + 1]
                                         # Pearson 宽松初筛, 最终阈值由 DTW/Pearson 决定
-                                        loose_mask = (row + 1) / 2 >= 0.5  # r >= 0
+                                        loose_mask = (row + 1) / 2 >= 0.65  # r >= 0.3, 与手动回测一致
                                         if loose_mask.any():
                                             if bt_algo in ("dtw", "pearson_dtw"):
                                                 # DTW 模式: Pearson 初筛 → DTW 筛选+排名
