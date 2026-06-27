@@ -32,10 +32,12 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    /* 全局表格居中对齐 */
     [data-testid="stDataFrame"] div[role="gridcell"],
-    [data-testid="stDataFrame"] div[role="columnheader"] {
-        justify-content: center;
-        text-align: center;
+    [data-testid="stDataFrame"] div[role="columnheader"],
+    .stTable td, .stTable th {
+        justify-content: center !important;
+        text-align: center !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -1579,7 +1581,7 @@ if tab_idx == 7:
                 tune_start = valid_tune.index.get_indexer([bt_start_dt_t], method="bfill")[0]
                 tune_end = valid_tune.index.get_indexer([bt_end_dt_t], method="ffill")[0] + 1
                 tune_start = max(tune_start, bt_window * 2)
-                tune_end = min(tune_end, n_tune - 10)
+                tune_end = min(tune_end, n_tune - max(_bt_lookaheads(15, ensemble_mode)))
 
                 if tune_end - tune_start < 60:
                     st.warning("数据不足 (walk-forward 需要至少 60 个有效回测日)")
