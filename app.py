@@ -1112,7 +1112,7 @@ if tab_idx == 7:
                                             avg_pred = np.mean(pred_by_la[mid_i]) if pred_by_la[mid_i] else 0
                                         else:
                                             avg_pred = np.mean(pred_by_la[0])
-                                        actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
+                                        actual_return = (price_vals[t + (10 if ensemble_mode else bt_lookahead) - 1] - price_vals[t]) / price_vals[t]
                                         if ensemble_mode:
                                             hit = (direction == 1 and actual_return > 0) or \
                                                   (direction == -1 and actual_return < 0)
