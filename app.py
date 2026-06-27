@@ -1028,10 +1028,20 @@ if tab_idx == 7:
                 end_idx = valid_bt.index.get_indexer([bt_end_dt], method="ffill")[0] + 1
                 start_idx = max(start_idx, bt_window * 2)
                 end_idx = min(end_idx, n - bt_lookahead)
+
+                if walk_forward:
+                    train_end = start_idx + int((end_idx - start_idx) * 0.7)
+                    start_idx = max(train_end, start_idx + bt_window * 2)
+
                 total_days = end_idx - start_idx
 
                 if total_days <= 0:
-                    st.warning("日期范围内无有效回测日 (需要至少窗口×2 天历史数据)")
+                    msg = "日期范围内无有效回测日"
+                    if walk_forward:
+                        msg += " (Walk-forward 测试集不足, 尝试延长日期范围或关闭 Walk-forward)"
+                    else:
+                        msg += " (需要至少窗口×2 天历史数据)"
+                    st.warning(msg)
                 else:
                     vals_dict = {f: valid_bt[f].values for f in bt_factors}
                     price_vals = df_factors.loc[valid_bt.index, "close"].values
