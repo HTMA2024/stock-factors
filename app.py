@@ -1789,6 +1789,95 @@ if tab_idx == 7:
                     price_vals_t = df_factors.loc[valid_tune.index, "close"].values
                     n_factors = len(bt_factors)
 
+                    def _eval_trial(win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                    combined_corr, price_vals_t, n_tune, eval_start, eval_end):
+                        results_t = []
+                        lheads_t = _bt_lookaheads(la, ensemble_mode)
+                        la_eff = max(lheads_t)
+                        la_eval = lheads_t[len(lheads_t) // 2]
+                        s_start = max(eval_start, win * 2)
+                        s_end = min(eval_end, n_tune - la_eff)
+                        # 择时过滤阈值
+                        vol_thresh_t = None
+                        if timing_filter:
+                            vt_data = df_factors["vol20d"].reindex(valid_tune.index).fillna(0)
+                            vol_thresh_t = np.percentile(vt_data[vt_data > 0], 80)
+                        for t in range(s_start, s_end):
+                            # 择时过滤
+                            if timing_filter and vol_thresh_t is not None:
+                                if vt_data.iloc[t] > vol_thresh_t:
+                                    continue
+                            tpl_idx = t - win
+                            hist_end = tpl_idx - win
+                            if hist_end >= 0:
+                                row = combined_corr[tpl_idx, :hist_end + 1]
+                                if bt_algo == "dtw":
+                                    loose_mask = np.ones(len(row), dtype=bool)
+                                else:
+                                    loose_mask = (row + 1) / 2 >= 0.65
+                                if loose_mask.any():
+                                    if bt_algo in ("dtw", "pearson_dtw"):
+                                        dtw_scores = []
+                                        for mi in np.where(loose_mask)[0]:
+                                            dtw_sim = 0.0
+                                            for f in bt_factors:
+                                                tpl_v = vals_dict_t[f][t - win:t]
+                                                win_v = vals_dict_t[f][mi:mi + win]
+                                                s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
+                                                if not np.isnan(s):
+                                                    dtw_sim += s
+                                            dtw_sim /= len(bt_factors)
+                                            if dtw_sim >= th:
+                                                dtw_scores.append((mi, dtw_sim))
+                                        if dtw_scores:
+                                            dtw_scores.sort(key=lambda x: -x[1])
+                                            top_k_idx = [x[0] for x in dtw_scores[:tk]]
+                                        else:
+                                            continue
+                                    else:
+                                        row_sim = (row + 1) / 2
+                                        match_idx = np.where(row_sim >= th)[0]
+                                        top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
+
+                                    pred_by_la = [[] for _ in lheads_t]
+                                    for s_idx in top_k_idx:
+                                        s_end_pos = s_idx + win - 1
+                                        for li, lh in enumerate(lheads_t):
+                                            if s_end_pos + 1 + lh <= n_tune:
+                                                pred_by_la[li].append(
+                                                    (price_vals_t[s_end_pos + lh] - price_vals_t[s_end_pos + 1])
+                                                    / price_vals_t[s_end_pos + 1]
+                                                )
+                                    pred_by_la = [pr for pr in pred_by_la if pr]
+                                    if pred_by_la:
+                                        direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
+                                        act_ret = (price_vals_t[t + la_eval - 1] - price_vals_t[t]) / price_vals_t[t]
+                                        hit, neutral = _classify_hit(direction, avg_pred, act_ret, ensemble_mode)
+                                        results_t.append({
+                                            "pred_return": avg_pred,
+                                            "actual_return": act_ret,
+                                            "hit": hit,
+                                            "neutral": neutral,
+                                        })
+                        return results_t
+
+                    def _compute_metrics(results):
+                        if not results:
+                            return None
+                        df = pd.DataFrame(results)
+                        sig = df[~df["neutral"]]
+                        if len(sig) == 0:
+                            return None
+                        seg_total, seg_hit, seg_rate, _ = _segment_stats(sig)
+                        return {
+                            "信号段数": seg_total,
+                            "命中段数": seg_hit,
+                            "段命中率%": round(seg_rate, 1),
+                            "原始命中率%": round(sig["hit"].sum() / len(sig) * 100, 1),
+                            "有效信号日": len(sig),
+                            "中性日": int(df["neutral"].sum()),
+                        }
+
                     if use_lgbm and n_factors > 1:
                         # ===== 联合优化: Optuna 同时搜权重 + 参数 =====
                         import optuna
@@ -1883,95 +1972,6 @@ if tab_idx == 7:
                         # ===== 网格搜索 (等权或手动权重) =====
                         st.caption(f"算法: {algo_label} | 三段切分: 训练 {train_days}天 → 验证 {valid_days}天 → 测试 {test_days}天 | 搜索 {total_trials} 种参数组合...")
                         price_vals_t = df_factors.loc[valid_tune.index, "close"].values
-
-                        def _eval_trial(win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
-                                        combined_corr, price_vals_t, n_tune, eval_start, eval_end):
-                            results_t = []
-                            lheads_t = _bt_lookaheads(la, ensemble_mode)
-                            la_eff = max(lheads_t)
-                            la_eval = lheads_t[len(lheads_t) // 2]
-                            s_start = max(eval_start, win * 2)
-                            s_end = min(eval_end, n_tune - la_eff)
-                            # 择时过滤阈值
-                            vol_thresh_t = None
-                            if timing_filter:
-                                vt_data = df_factors["vol20d"].reindex(valid_tune.index).fillna(0)
-                                vol_thresh_t = np.percentile(vt_data[vt_data > 0], 80)
-                            for t in range(s_start, s_end):
-                                # 择时过滤
-                                if timing_filter and vol_thresh_t is not None:
-                                    if vt_data.iloc[t] > vol_thresh_t:
-                                        continue
-                                tpl_idx = t - win
-                                hist_end = tpl_idx - win
-                                if hist_end >= 0:
-                                    row = combined_corr[tpl_idx, :hist_end + 1]
-                                    if bt_algo == "dtw":
-                                        loose_mask = np.ones(len(row), dtype=bool)
-                                    else:
-                                        loose_mask = (row + 1) / 2 >= 0.65
-                                    if loose_mask.any():
-                                        if bt_algo in ("dtw", "pearson_dtw"):
-                                            dtw_scores = []
-                                            for mi in np.where(loose_mask)[0]:
-                                                dtw_sim = 0.0
-                                                for f in bt_factors:
-                                                    tpl_v = vals_dict_t[f][t - win:t]
-                                                    win_v = vals_dict_t[f][mi:mi + win]
-                                                    s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
-                                                    if not np.isnan(s):
-                                                        dtw_sim += s
-                                                dtw_sim /= len(bt_factors)
-                                                if dtw_sim >= th:
-                                                    dtw_scores.append((mi, dtw_sim))
-                                            if dtw_scores:
-                                                dtw_scores.sort(key=lambda x: -x[1])
-                                                top_k_idx = [x[0] for x in dtw_scores[:tk]]
-                                            else:
-                                                continue
-                                        else:
-                                            row_sim = (row + 1) / 2
-                                            match_idx = np.where(row_sim >= th)[0]
-                                            top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
-
-                                        pred_by_la = [[] for _ in lheads_t]
-                                        for s_idx in top_k_idx:
-                                            s_end_pos = s_idx + win - 1
-                                            for li, lh in enumerate(lheads_t):
-                                                if s_end_pos + 1 + lh <= n_tune:
-                                                    pred_by_la[li].append(
-                                                        (price_vals_t[s_end_pos + lh] - price_vals_t[s_end_pos + 1])
-                                                        / price_vals_t[s_end_pos + 1]
-                                                    )
-                                        pred_by_la = [pr for pr in pred_by_la if pr]
-                                        if pred_by_la:
-                                            direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
-                                            act_ret = (price_vals_t[t + la_eval - 1] - price_vals_t[t]) / price_vals_t[t]
-                                            hit, neutral = _classify_hit(direction, avg_pred, act_ret, ensemble_mode)
-                                            results_t.append({
-                                                "pred_return": avg_pred,
-                                                "actual_return": act_ret,
-                                                "hit": hit,
-                                                "neutral": neutral,
-                                            })
-                            return results_t
-
-                        def _compute_metrics(results):
-                            if not results:
-                                return None
-                            df = pd.DataFrame(results)
-                            sig = df[~df["neutral"]]
-                            if len(sig) == 0:
-                                return None
-                            seg_total, seg_hit, seg_rate, _ = _segment_stats(sig)
-                            return {
-                                "信号段数": seg_total,
-                                "命中段数": seg_hit,
-                                "段命中率%": round(seg_rate, 1),
-                                "原始命中率%": round(sig["hit"].sum() / len(sig) * 100, 1),
-                                "有效信号日": len(sig),
-                                "中性日": int(df["neutral"].sum()),
-                            }
 
                         train_results = []
                         tune_progress = st.progress(0)
