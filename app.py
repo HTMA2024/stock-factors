@@ -1667,15 +1667,11 @@ if tab_idx == 7:
                         sig = df[~df["neutral"]]
                         if len(sig) == 0:
                             return None
-                        sig["pred_sign"] = np.sign(sig["pred_return"])
-                        sig["seg"] = (sig["pred_sign"] != sig["pred_sign"].shift(1)).cumsum()
-                        segs = sig.groupby("seg")
-                        seg_total = len(segs)
-                        seg_hit = sum(1 for _, g in segs if g["hit"].sum() > len(g) / 2)
+                        seg_total, seg_hit, seg_rate, _ = _segment_stats(sig)
                         return {
                             "信号段数": seg_total,
                             "命中段数": seg_hit,
-                            "段命中率%": round(seg_hit / seg_total * 100, 1) if seg_total > 0 else 0,
+                            "段命中率%": round(seg_rate, 1),
                             "原始命中率%": round(sig["hit"].sum() / len(sig) * 100, 1),
                             "有效信号日": len(sig),
                             "中性日": int(df["neutral"].sum()),
