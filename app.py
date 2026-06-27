@@ -1426,12 +1426,12 @@ if tab_idx == 7:
 
                                         pred_rets = []
                                         for s_idx in top_k_idx:
-                                        s_end_pos = s_idx + win - 1
-                                        if s_end_pos + la <= n_tune:
-                                            fut_s = vals_dict_t[bt_factors[0]][s_end_pos]
-                                            fut_e = vals_dict_t[bt_factors[0]][s_end_pos + la - 1]
-                                            pred_rets.append((fut_e - fut_s) / fut_s)
-                                            if pred_rets:
+                                            s_end_pos = s_idx + win - 1
+                                            if s_end_pos + la <= n_tune:
+                                                fut_s = vals_dict_t[bt_factors[0]][s_end_pos]
+                                                fut_e = vals_dict_t[bt_factors[0]][s_end_pos + la - 1]
+                                                pred_rets.append((fut_e - fut_s) / fut_s)
+                                                if pred_rets:
                                                 avg_pred = np.mean(pred_rets)
                                                 act_s = vals_dict_t[bt_factors[0]][t]
                                                 act_e = vals_dict_t[bt_factors[0]][t + la - 1]
