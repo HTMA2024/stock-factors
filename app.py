@@ -1326,7 +1326,7 @@ if tab_idx == 7:
                     # ---- 执行回测 ----
                     if fast_mode and bt_algo == "pearson":
                         with st.spinner(f"预计算相关系数矩阵 ({len(bt_factors)} 因子 × {n - win + 1} 窗口)..."):
-                            combined_corr = _pearson_corr_matrix([vals_dict[f] for f in bt_factors], win)
+                            combined_corr = _pearson_corr_matrix([vals_dict[f] for f in bt_factors], win, bt_weight_list)
 
                         if walk_forward:
                             st.caption(f"三段切分: 训练 {train_end - full_start}天 → 验证 {valid_end - train_end}天 → 测试 {end_idx - test_start}天")
@@ -1344,7 +1344,7 @@ if tab_idx == 7:
                     else:
                         pearson_mat_bt = None
                         if bt_algo == "pearson_dtw":
-                            pearson_mat_bt = _pearson_corr_matrix([vals_dict[f] for f in bt_factors], win)
+                            pearson_mat_bt = _pearson_corr_matrix([vals_dict[f] for f in bt_factors], win, bt_weight_list)
 
                         with st.spinner(f"正在回测 {total_days} 个交易日..."):
                             if walk_forward:
@@ -1806,7 +1806,7 @@ if tab_idx == 7:
 
                     for win in windows:
                         vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                        combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win)
+                        combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
 
                         for la in lookaheads:
                             for th in thresholds:
@@ -1844,7 +1844,7 @@ if tab_idx == 7:
                             row = df_train.iloc[ti]
                             win, la, th, tk = int(row["_win"]), int(row["_la"]), row["_th"], int(row["_tk"])
                             vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                            combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win)
+                            combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
                             results_t = _eval_trial(
                                 win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                 combined_corr, price_vals_t, n_tune,
@@ -1885,7 +1885,7 @@ if tab_idx == 7:
                                 vrow = df_valid.iloc[ti]
                                 win, la, th, tk = int(vrow["_win"]), int(vrow["_la"]), vrow["_th"], int(vrow["_tk"])
                                 vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                                combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win)
+                                combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
                                 results_t = _eval_trial(
                                     win, la, th, tk, bt_algo, bt_factors,
                                     vals_dict_t, combined_corr, price_vals_t, n_tune,
