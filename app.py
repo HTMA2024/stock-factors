@@ -1347,12 +1347,14 @@ if tab_idx == 7:
             st.dataframe(df_t[tune_cols], width='stretch', hide_index=True, column_config=col_cfg)
 
     if "bt_results" in st.session_state and st.session_state.bt_results is None:
-        has_train_none = ("bt_train_results" not in st.session_state or
-                          st.session_state.bt_train_results is None)
-        if has_train_none:
+        has_train = ("bt_train_results" in st.session_state and
+                     st.session_state.bt_train_results is not None)
+        has_valid = ("bt_valid_results" in st.session_state and
+                     st.session_state.bt_valid_results is not None)
+        if not has_train and not has_valid:
             st.info(f"未找到任何满足阈值 {bt_threshold} 的匹配, 尝试降低阈值")
-        elif st.session_state.bt_train_results is not None:
-            st.info("测试集无有效信号, 训练集有结果但不在测试集复现 — 可能过拟合了")
+        elif has_train or has_valid:
+            st.info("测试集无有效信号, 训练/验证集有结果但未在测试集复现 — 可能过拟合了")
 
     if "bt_results" in st.session_state and st.session_state.bt_results is not None:
         df_res = pd.DataFrame(st.session_state.bt_results)
