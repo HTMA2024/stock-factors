@@ -1771,14 +1771,7 @@ if tab_idx == 7:
 
                     for win in windows:
                         vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                        combined_corr = np.zeros((n_tune - win + 1, n_tune - win + 1))
-                        for factor in bt_factors:
-                            vals = vals_dict_t[factor]
-                            W = np.lib.stride_tricks.sliding_window_view(vals, win)
-                            mean = W.mean(axis=1, keepdims=True)
-                            std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
-                            Wz = (W - mean) / std
-                            combined_corr += (Wz @ Wz.T) / (win - 1) * (1.0 / len(bt_factors))
+                        combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win)
 
                         for la in lookaheads:
                             for th in thresholds:
