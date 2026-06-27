@@ -1065,9 +1065,9 @@ if tab_idx == 7:
                                     pred_returns = []
                                     for s_idx in top_k_idx:
                                         s_end = s_idx + win - 1  # 历史窗口结束位置
-                                        if s_end + bt_lookahead <= n:
-                                            fut_start = vals_dict[bt_factors[0]][s_end]
-                                            fut_end = vals_dict[bt_factors[0]][s_end + bt_lookahead - 1]
+                                        if s_end + 1 + bt_lookahead <= n:
+                                            fut_start = vals_dict[bt_factors[0]][s_end + 1]
+                                            fut_end = vals_dict[bt_factors[0]][s_end + bt_lookahead]
                                             pred_returns.append((fut_end - fut_start) / fut_start)
 
                                     if pred_returns:
