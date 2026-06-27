@@ -1299,14 +1299,7 @@ if tab_idx == 7:
                     # ---- 执行回测 ----
                     if fast_mode and bt_algo == "pearson":
                         with st.spinner(f"预计算相关系数矩阵 ({len(bt_factors)} 因子 × {n - win + 1} 窗口)..."):
-                            combined_corr = np.zeros((n - win + 1, n - win + 1))
-                            for factor in bt_factors:
-                                vals = vals_dict[factor]
-                                W = np.lib.stride_tricks.sliding_window_view(vals, win)
-                                mean = W.mean(axis=1, keepdims=True)
-                                std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
-                                Wz = (W - mean) / std
-                                combined_corr += (Wz @ Wz.T) / (win - 1) * (1.0 / len(bt_factors))
+                            combined_corr = _pearson_corr_matrix([vals_dict[f] for f in bt_factors], win)
 
                         if walk_forward:
                             st.caption(f"Walk-forward: 训练集 {train_end - full_start} 天, 测试集 {end_idx - train_end} 天")
