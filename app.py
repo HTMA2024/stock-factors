@@ -276,6 +276,88 @@ def _ensemble_dir(pred_rets_by_la):
     if bearish > bullish: return -1
     return 0
 
+
+def _pearson_corr_matrix(value_arrays, win):
+    """多因子滑动窗口 Pearson 相关矩阵 (各因子等权平均)。
+
+    value_arrays: list of 1D np.ndarray, 每个因子一条序列。
+    返回 shape (n_win, n_win) 的相关系数矩阵。
+    """
+    n_win = len(value_arrays[0]) - win + 1
+    mat = np.zeros((n_win, n_win))
+    for vals in value_arrays:
+        W = np.lib.stride_tricks.sliding_window_view(vals, win)
+        mean = W.mean(axis=1, keepdims=True)
+        std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
+        Wz = (W - mean) / std
+        mat += (Wz @ Wz.T) / (win - 1)
+    mat /= len(value_arrays)
+    return mat
+
+
+def _predict_direction(pred_by_la, ensemble):
+    """从各 lookahead 的后续收益列表计算 (direction, avg_pred)。
+
+    pred_by_la: 已过滤空列表的 list[list[float]]。
+    ensemble=True 时用多窗口投票得 direction; 否则 direction=0 仅用 avg_pred。
+    """
+    if ensemble:
+        direction = _ensemble_dir(pred_by_la)
+        mid = len(pred_by_la) // 2
+        avg_pred = np.mean(pred_by_la[mid]) if pred_by_la[mid] else 0
+    else:
+        direction = 0
+        avg_pred = np.mean(pred_by_la[0])
+    return direction, avg_pred
+
+
+def _classify_hit(direction, avg_pred, actual_return, ensemble, ensemble_neutral_hit=False):
+    """统一命中/中性判定, 返回 (hit, neutral)。
+
+    ensemble_neutral_hit: 仅为保留慢速模式历史行为 (direction==0 且实际近乎持平
+    也算命中)。设为 False 即与 fast / 自动调参路径一致 (推荐)。
+    """
+    if ensemble:
+        hit = (direction == 1 and actual_return > 0) or \
+              (direction == -1 and actual_return < 0)
+        if ensemble_neutral_hit:
+            hit = hit or (direction == 0 and abs(actual_return) < 0.001)
+        neutral = (direction == 0)
+    elif abs(avg_pred) < 0.001:
+        hit, neutral = False, True
+    else:
+        hit = (avg_pred > 0 and actual_return > 0) or \
+              (avg_pred < 0 and actual_return < 0)
+        neutral = False
+    return hit, neutral
+
+
+def _segment_stats(df_signal):
+    """信号段去重统计: 连续同向预测合并为段, 段内过半命中才算命中。
+
+    df_signal: 含 date / pred_return / hit 列, 已排除中性日。
+    返回 (段数, 命中段数, 段命中率%, 段均天数)。
+    """
+    if len(df_signal) == 0:
+        return 0, 0, 0.0, 0.0
+    d = df_signal.sort_values("date")
+    sign = np.sign(d["pred_return"].fillna(0))
+    seg_id = (sign != sign.shift(1)).cumsum()
+    segs = d.groupby(seg_id)
+    seg_total = len(segs)
+    seg_hits = sum(1 for _, g in segs if g["hit"].sum() > len(g) / 2)
+    seg_rate = seg_hits / seg_total * 100 if seg_total > 0 else 0.0
+    seg_avg_days = segs.size().mean() if seg_total > 0 else 0.0
+    return seg_total, seg_hits, seg_rate, seg_avg_days
+
+
+def _hit_color(hit, neutral):
+    """命中/未命中/中性 → 颜色 (绿/红/灰)。"""
+    if neutral:
+        return "#9e9e9e"
+    return "#26a69a" if hit else "#ef5350"
+
+
 # ---- 辅助函数 ----
 def _plotly_chart(fig, height=400):
     """统一渲染 Plotly 图表"""
