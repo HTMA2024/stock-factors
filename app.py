@@ -1160,11 +1160,11 @@ if tab_idx == 7:
                             st.caption(f"Walk-forward: 训练集 {train_end - full_start} 天, 测试集 {end_idx - train_end} 天")
                             results_train = _run_bt_fast(full_start, train_end, combined_corr)
                             results_test = _run_bt_fast(train_end, end_idx, combined_corr)
-                            st.session_state.bt_train_results = results_train
-                            st.session_state.bt_results = results_test
+                            st.session_state.bt_train_results = results_train if results_train else None
+                            st.session_state.bt_results = results_test if results_test else None
                         else:
                             results = _run_bt_fast(start_idx, end_idx, combined_corr)
-                            st.session_state.bt_results = results
+                            st.session_state.bt_results = results if results else None
                             st.session_state.bt_train_results = None
                     else:
                         pearson_mat_bt = None
