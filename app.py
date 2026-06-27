@@ -357,15 +357,17 @@ def _lgbm_weights(valid_data, bt_factors, win, la, th, tk, price_vals, n, eval_s
     X_train = np.array(X_train)
     y_train = np.array(y_train)
 
-    # 训练 LightGBM
-    model = lgb.LGBMClassifier(n_estimators=50, max_depth=3, verbose=-1, n_jobs=1)
+    # 用逻辑回归学习权重 (系数 = 各因子对命中的线性贡献)
+    from sklearn.linear_model import LogisticRegression
+    model = LogisticRegression(max_iter=1000)
     model.fit(X_train, y_train)
 
-    # 特征重要性 → 归一化为权重
-    importances = model.feature_importances_
-    if importances.sum() == 0:
+    # 系数 → 归一化为权重 (去负号, 正系数=正向贡献)
+    coefs = model.coef_[0]
+    coefs = np.maximum(coefs, 0)  # 负系数置零 (该因子起反作用时不纳入)
+    if coefs.sum() == 0:
         return None
-    weights = importances / importances.sum()
+    weights = coefs / coefs.sum()
     return dict(zip(bt_factors, weights))
 
 
