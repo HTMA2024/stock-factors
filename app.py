@@ -869,7 +869,8 @@ if tab_idx == 6:
                 # pearson_dtw: 预计算 Pearson 矩阵做初筛
                 pearson_mat = None
                 if algo_name == "pearson_dtw":
-                    pearson_mat = _pearson_corr_matrix([valid_df[f].values for f in selected], win)
+                    pearson_mat = _pearson_corr_matrix([valid_df[f].values for f in selected], win,
+                                                         [weights.get(f, 1.0 / len(selected)) for f in selected])
 
                 for factor in selected:
                     tpl_vals = tpl[factor].values
