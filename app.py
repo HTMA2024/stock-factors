@@ -174,6 +174,7 @@ FACTOR_PRESETS = {
     "估值+价": ["close", "pe_ttm"],
     "形态信号": ["sig_macross", "sig_rsizone", "sig_volbreak"],
 }
+SIGNAL_FACTORS = ["sig_macross", "sig_rsizone", "sig_volbreak", "sig_macd", "sig_bbsqueeze"]
 
 
 # ===========================================================================
