@@ -1194,6 +1194,7 @@ if tab_idx == 7:
                                     top_k_idx = match_indices[np.argsort(-match_scores)[:bt_topk]]
                                     top_scores = row[top_k_idx]
                                     lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
+                                    eval_la = lheads[len(lheads) // 2]
                                     pred_by_la = [[] for _ in lheads]
                                     for s_idx in top_k_idx:
                                         s_end = s_idx + win - 1
@@ -1201,11 +1202,10 @@ if tab_idx == 7:
                                             if s_end + 1 + la <= n:
                                                 r = (price_vals[s_end + la] - price_vals[s_end + 1]) / price_vals[s_end + 1]
                                                 pred_by_la[li].append(r)
-                                    # 过滤空的
                                     pred_by_la = [pr for pr in pred_by_la if pr]
                                     if pred_by_la:
                                         direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
-                                        actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
+                                        actual_return = (price_vals[t + eval_la - 1] - price_vals[t]) / price_vals[t]
                                         hit, neutral = _classify_hit(direction, avg_pred, actual_return, ensemble_mode)
                                         res.append({
                                             "date": valid_bt.index[t], "matches": len(match_indices),
@@ -1254,6 +1254,7 @@ if tab_idx == 7:
                                 scores.sort(key=lambda x: -x[0])
                                 top = scores[:bt_topk]
                                 lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
+                                eval_la = lheads[len(lheads) // 2]
                                 pred_by_la = [[] for _ in lheads]
                                 for _, _, futs in top:
                                     for li, fut in enumerate(futs):
@@ -1263,7 +1264,7 @@ if tab_idx == 7:
                                 if not pred_by_la:
                                     continue
                                 direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
-                                actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
+                                actual_return = (price_vals[t + eval_la - 1] - price_vals[t]) / price_vals[t]
                                 hit, neutral = _classify_hit(direction, avg_pred, actual_return,
                                                              ensemble_mode, ensemble_neutral_hit=True)
                                 res.append({
