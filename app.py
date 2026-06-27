@@ -1313,12 +1313,12 @@ if tab_idx == 7:
     if "tune_df" in st.session_state and st.session_state.tune_df is not None:
         df_t = st.session_state.tune_df
         tune_cols = [c for c in df_t.columns if not c.startswith("_")]
-        with st.expander("📊 自动调参结果 (Top 5)", expanded=True):
+        with st.expander("📊 三段切分最优参数 (训练→验证→测试)", expanded=True):
             col_cfg = {}
             for c in tune_cols:
                 if "命中率" in c:
                     col_cfg[c] = st.column_config.NumberColumn(format="%.1f%%")
-            st.dataframe(df_t[tune_cols].head(5), width='stretch', hide_index=True, column_config=col_cfg)
+            st.dataframe(df_t[tune_cols], width='stretch', hide_index=True, column_config=col_cfg)
 
     if "bt_results" in st.session_state and st.session_state.bt_results is None:
         has_train_none = ("bt_train_results" not in st.session_state or
@@ -1562,15 +1562,19 @@ if tab_idx == 7:
                     thresholds = [0.7, 0.8, 0.85, 0.9, 0.95]
                     topks = [1, 3, 5]
 
-                    # Walk-forward 切分: 前70%训练, 后30%测试
-                    train_end = tune_start + int((tune_end - tune_start) * 0.7)
-                    test_start = train_end
+                    # Walk-forward 三段切分: 训练50% → 验证20% → 测试30%
+                    total_range = tune_end - tune_start
+                    train_end = tune_start + int(total_range * 0.5)
+                    valid_start = train_end
+                    valid_end = tune_start + int(total_range * 0.7)
+                    test_start = valid_end
                     train_days = train_end - tune_start
+                    valid_days = valid_end - valid_start
                     test_days = tune_end - test_start
 
                     total_trials = len(windows) * len(lookaheads) * len(thresholds) * len(topks)
                     algo_label = {"pearson": "Pearson", "dtw": "DTW", "pearson_dtw": "Pearson+DTW"}.get(bt_algo, bt_algo)
-                    st.caption(f"算法: {algo_label} | Walk-forward: 训练集 {train_days} 天, 测试集 {test_days} 天 | 搜索 {total_trials} 种参数组合...")
+                    st.caption(f"算法: {algo_label} | 三段切分: 训练 {train_days}天 → 验证 {valid_days}天 → 测试 {test_days}天 | 搜索 {total_trials} 种参数组合...")
 
                     price_vals_t = df_factors.loc[valid_tune.index, "close"].values
 
@@ -1661,7 +1665,7 @@ if tab_idx == 7:
                             "中性日": int(df["neutral"].sum()),
                         }
 
-                    tune_train_results = []
+                    train_results = []
                     tune_progress = st.progress(0)
                     trial_idx = 0
 
@@ -1679,7 +1683,7 @@ if tab_idx == 7:
                                     )
                                     metrics = _compute_metrics(results_t)
                                     if metrics:
-                                        tune_train_results.append({
+                                        train_results.append({
                                             "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
                                             "训练段命中率%": metrics["段命中率%"],
                                             "训练原始命中率%": metrics["原始命中率%"],
@@ -1691,61 +1695,113 @@ if tab_idx == 7:
                                     trial_idx += 1
                                     tune_progress.progress(trial_idx / total_trials)
 
-                    if not tune_train_results:
+                    if not train_results:
                         st.warning("训练集未找到任何有效参数组合")
                     else:
-                        st.session_state.tune_df = pd.DataFrame(tune_train_results).sort_values("训练段命中率%", ascending=False)
-                        df_tune_train = st.session_state.tune_df
+                        df_train = pd.DataFrame(train_results).sort_values("训练段命中率%", ascending=False)
+                        top_n_valid = min(15, len(df_train))
 
-                        # Walk-forward: 对 Top 15 在测试集上评估
-                        st.caption(f"对训练集 Top 15 参数组合在测试集 ({test_days} 天) 上验证...")
-                        test_progress = st.progress(0)
-                        test_rows = []
-                        top_n = min(15, len(df_tune_train))
-                        for ti in range(top_n):
-                            row = df_tune_train.iloc[ti]
+                        # 阶段2: 验证集从 Top 15 中选出最优
+                        st.caption(f"验证集 ({valid_days} 天) 评估训练 Top {top_n_valid} 参数...")
+                        valid_progress = st.progress(0)
+                        valid_rows = []
+                        for ti in range(top_n_valid):
+                            row = df_train.iloc[ti]
                             win, la, th, tk = int(row["_win"]), int(row["_la"]), row["_th"], int(row["_tk"])
                             vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
                             combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win)
                             results_t = _eval_trial(
                                 win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                 combined_corr, price_vals_t, n_tune,
-                                test_start, tune_end,
+                                valid_start, valid_end,
                             )
                             metrics = _compute_metrics(results_t)
                             if metrics:
-                                test_rows.append({
+                                valid_rows.append({
                                     "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
                                     "训练段命中率%": row["训练段命中率%"],
-                                    "测试段命中率%": metrics["段命中率%"],
-                                    "测试段数": metrics["信号段数"],
+                                    "验证段命中率%": metrics["段命中率%"],
+                                    "验证段数": metrics["信号段数"],
                                     "训练原始命中率%": row["训练原始命中率%"],
-                                    "测试原始命中率%": metrics["原始命中率%"],
-                                    "测试有效日": metrics["有效信号日"],
-                                    "测试中性日": metrics["中性日"],
+                                    "验证原始命中率%": metrics["原始命中率%"],
+                                    "验证有效日": metrics["有效信号日"],
+                                    "验证中性日": metrics["中性日"],
+                                    "_win": win, "_la": la, "_th": th, "_tk": tk,
                                 })
-                            test_progress.progress((ti + 1) / top_n)
+                            valid_progress.progress((ti + 1) / top_n_valid)
 
-                        if test_rows:
-                            df_final = pd.DataFrame(test_rows)
-                            df_final = df_final.sort_values("测试段命中率%", ascending=False)
-                            st.session_state.tune_df = df_final  # 用含测试集的结果覆盖
-
-                            st.subheader(f"🏆 Walk-forward 最优参数 Top 15")
-                            st.caption(f"参数搜索于训练集, 打分排序于测试集 (out-of-sample)")
-                            st.dataframe(
-                                df_final.head(15),
-                                width='stretch',
-                                hide_index=True,
-                                column_config={
-                                    "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                    "测试段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                    "训练原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                    "测试原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                }
-                            )
+                        if not valid_rows:
+                            st.warning("验证集未找到任何有效参数组合")
                         else:
-                            st.warning("测试集未找到任何有效参数组合")
+                            df_valid = pd.DataFrame(valid_rows)
+                            df_valid = df_valid.sort_values(
+                                ["验证段命中率%", "验证段数"], ascending=[False, False]
+                            )
+                            best_row = df_valid.iloc[0]
+                            best_win, best_la, best_th, best_tk = (
+                                int(best_row["_win"]), int(best_row["_la"]),
+                                best_row["_th"], int(best_row["_tk"]),
+                            )
+
+                            # 阶段3: 测试集对唯一选出的最优参数评估一次
+                            st.caption(f"测试集 ({test_days} 天) 对验证最优 ({best_win}d/{best_la}d/th={best_th}/top{best_tk}) 做无偏评估...")
+                            vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
+                            combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], best_win)
+                            results_t = _eval_trial(
+                                best_win, best_la, best_th, best_tk, bt_algo, bt_factors,
+                                vals_dict_t, combined_corr, price_vals_t, n_tune,
+                                test_start, tune_end,
+                            )
+                            test_metrics = _compute_metrics(results_t)
+
+                            if test_metrics:
+                                st.session_state.tune_df = pd.DataFrame([{
+                                    "窗口": best_win,
+                                    "预测天": best_la,
+                                    "阈值": best_th,
+                                    "TopK": best_tk,
+                                    "训练段命中率%": best_row["训练段命中率%"],
+                                    "验证段命中率%": best_row["验证段命中率%"],
+                                    "测试段命中率%": test_metrics["段命中率%"],
+                                    "训练原始%": best_row["训练原始命中率%"],
+                                    "验证原始%": best_row["验证原始命中率%"],
+                                    "测试原始%": test_metrics["原始命中率%"],
+                                    "训练信号段": best_row.get("训练信号段数", "-"),
+                                    "验证信号段": best_row["验证段数"],
+                                    "测试信号段": test_metrics["信号段数"],
+                                }])
+
+                                st.subheader("三段切分最优参数 (训练 → 验证 → 测试)")
+                                st.caption("测试集全程未参与选参, 为无偏 out-of-sample 估计")
+                                st.dataframe(
+                                    st.session_state.tune_df,
+                                    width='stretch',
+                                    hide_index=True,
+                                    column_config={
+                                        "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "验证段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "测试段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "训练原始%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "验证原始%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "测试原始%": st.column_config.NumberColumn(format="%.1f%%"),
+                                    }
+                                )
+
+                                with st.expander("验证集 Top 5 参数 (仅供参考导向)"):
+                                    show_cols = [c for c in df_valid.columns if not c.startswith("_")]
+                                    st.dataframe(
+                                        df_valid[show_cols].head(5),
+                                        width='stretch',
+                                        hide_index=True,
+                                        column_config={
+                                            "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                            "验证段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                            "训练原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                            "验证原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        }
+                                    )
+                            else:
+                                st.warning("测试集未找到有效信号")
 # Tab 8: 数据表格
 # ===========================================================================
 if tab_idx == 8:
