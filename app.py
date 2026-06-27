@@ -839,16 +839,7 @@ if tab_idx == 6:
                 # pearson_dtw: 预计算 Pearson 矩阵做初筛
                 pearson_mat = None
                 if algo_name == "pearson_dtw":
-                    n_win = n - win + 1
-                    pearson_mat = np.zeros((n_win, n_win))
-                    for factor in selected:
-                        vals = valid_df[factor].values
-                        W = np.lib.stride_tricks.sliding_window_view(vals, win)
-                        mean = W.mean(axis=1, keepdims=True)
-                        std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
-                        Wz = (W - mean) / std
-                        pearson_mat += (Wz @ Wz.T) / (win - 1)
-                    pearson_mat /= len(selected)
+                    pearson_mat = _pearson_corr_matrix([valid_df[f].values for f in selected], win)
 
                 for factor in selected:
                     tpl_vals = tpl[factor].values
