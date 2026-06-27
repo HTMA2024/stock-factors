@@ -1165,8 +1165,11 @@ if tab_idx == 7:
                 full_start = start_idx  # 记住原始起始位, walk-forward 时切分要用
 
                 if walk_forward:
-                    train_end = start_idx + int((end_idx - start_idx) * 0.7)
-                    start_idx = max(train_end, start_idx + bt_window * 2)
+                    total_range = end_idx - full_start
+                    train_end = full_start + int(total_range * 0.5)
+                    valid_end = full_start + int(total_range * 0.7)
+                    test_start = valid_end
+                    start_idx = test_start
 
                 total_days = end_idx - start_idx
 
