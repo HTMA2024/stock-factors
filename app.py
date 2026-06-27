@@ -1911,17 +1911,30 @@ if tab_idx == 7:
                             # 加权相关矩阵
                             combined_corr = sum(w_list[i] * factor_mats_cache[win][i] for i in range(n_factors))
 
-                            # 快速回测 (训练集)
-                            results_t = _eval_trial(
+                            # 训练集 Wilson
+                            results_train = _eval_trial(
                                 win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                 combined_corr, price_vals_t, n_tune,
                                 tune_start, train_end,
                             )
-                            metrics = _compute_metrics(results_t)
-                            if not metrics:
+                            m_train = _compute_metrics(results_train)
+                            if not m_train:
                                 return 0.0
-                            # 用 Wilson 下界替代原始命中率, 自动惩罚低段数刷分
-                            return _wilson_lower(metrics["命中段数"], metrics["信号段数"])
+                            wilson_train = _wilson_lower(m_train["命中段数"], m_train["信号段数"])
+
+                            # 验证集 Wilson
+                            results_valid = _eval_trial(
+                                win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                combined_corr, price_vals_t, n_tune,
+                                valid_start, valid_end,
+                            )
+                            m_valid = _compute_metrics(results_valid)
+                            if not m_valid:
+                                return wilson_train * 0.5  # 验证集无信号, 降权
+                            wilson_valid = _wilson_lower(m_valid["命中段数"], m_valid["信号段数"])
+
+                            # 联合目标: 训练 + 验证各 50%
+                            return 0.5 * wilson_train + 0.5 * wilson_valid
 
                         n_optuna_trials = 200
                         st.caption(f"算法: {algo_label} + Optuna 联合优化 | 三段切分: 训练 {train_days}天 → 验证 {valid_days}天 → 测试 {test_days}天 | 搜索 {n_optuna_trials} 次...")
