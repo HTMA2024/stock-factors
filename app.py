@@ -1951,11 +1951,21 @@ if tab_idx == 7:
                             study.optimize(optuna_objective, n_trials=n_optuna_trials,
                                           callbacks=[progress_callback], show_progress_bar=False)
 
-                        # 提取 Top 15 参数组合
+                        # 提取 Top 15 参数组合 (按 (窗口,预测,TopK) 去重, 每组只保留 Wilson 最高的)
+                        all_trials = sorted(study.trials, key=lambda t: t.value if t.value is not None else -1, reverse=True)
+                        seen_keys = set()
                         train_results = []
-                        for trial in sorted(study.trials, key=lambda t: t.value if t.value is not None else -1, reverse=True)[:15]:
+                        for trial in all_trials:
+                            if len(train_results) >= 15:
+                                break
                             params = trial.params
                             win, la, th, tk = params["win"], params["la"], params["th"], params["tk"]
+                            # 去重 key: (窗口, 预测, TopK), 阈值四舍五入到 0.05
+                            dedup_key = (win, la, tk, round(th * 20) / 20)
+                            if dedup_key in seen_keys:
+                                continue
+                            seen_keys.add(dedup_key)
+
                             raw_w = [params[f"w_{i}"] for i in range(n_factors)]
                             total_w = sum(raw_w)
                             w_list = [r / total_w for r in raw_w] if total_w > 0 else [1/n_factors]*n_factors
@@ -1968,8 +1978,10 @@ if tab_idx == 7:
                             )
                             metrics = _compute_metrics(results_t)
                             if metrics:
+                                w_str = " | ".join(f"{f}:{w:.0%}" for f, w in zip(bt_factors, w_list))
                                 train_results.append({
                                     "窗口": win, "预测天": la, "阈值": round(th, 2), "TopK": tk,
+                                    "因子权重": w_str,
                                     "训练段命中率%": metrics["段命中率%"],
                                     "训练原始命中率%": metrics["原始命中率%"],
                                     "训练信号段数": metrics["信号段数"],
