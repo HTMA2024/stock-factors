@@ -942,12 +942,10 @@ if tab_idx == 7:
     st.caption("逐日回测: 每一天生成模板 → 匹配历史 → 记录预测 vs 实际, 计算命中率")
 
     # 匹配因子池
-    bt_pool_base = [c for c in df_factors.columns if c not in
-                    ["open", "high", "low", "volume", "amount", "turnover",
-                     "pct_change", "dif", "dea", "macd"] + SIGNAL_FACTORS +
-                    [c for c in df_factors.columns if c.startswith("bb_") and c not in ["bb_pct_b"]]]
-    show_signals_bt = st.toggle("包含技术形态信号", key="show_sig_bt")
-    bt_factors_pool = bt_pool_base + (SIGNAL_FACTORS if show_signals_bt else [])
+    bt_factors_pool = [c for c in df_factors.columns if c not in
+                        ["open", "high", "low", "volume", "amount", "turnover",
+                         "pct_change", "dif", "dea", "macd"] +
+                        [c for c in df_factors.columns if c.startswith("bb_") and c not in ["bb_pct_b"]]]
 
     # ---- 滑动条 ----
     st.caption("参数设置")
