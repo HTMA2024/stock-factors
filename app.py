@@ -1790,8 +1790,11 @@ if tab_idx == 7:
                     n_factors = len(bt_factors)
 
                     def _eval_trial(win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
-                                    combined_corr, price_vals_t, n_tune, eval_start, eval_end):
+                                    combined_corr, price_vals_t, n_tune, eval_start, eval_end,
+                                    w_list=None):
                         results_t = []
+                        if w_list is None:
+                            w_list = [1.0 / len(bt_factors)] * len(bt_factors)
                         lheads_t = _bt_lookaheads(la, ensemble_mode)
                         la_eff = max(lheads_t)
                         la_eval = lheads_t[len(lheads_t) // 2]
