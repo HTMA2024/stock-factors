@@ -2003,124 +2003,124 @@ if tab_idx == 7:
                                         trial_idx += 1
                                         tune_progress.progress(trial_idx / total_trials)
 
-                        if not train_results:
-                            st.warning("训练集未找到任何有效参数组合")
-                        else:
-                            df_train = pd.DataFrame(train_results).sort_values("训练段命中率%", ascending=False)
-                            top_n_valid = min(15, len(df_train))
+                    if not train_results:
+                        st.warning("训练集未找到任何有效参数组合")
+                    else:
+                        df_train = pd.DataFrame(train_results).sort_values("训练段命中率%", ascending=False)
+                        top_n_valid = min(15, len(df_train))
 
-                            # 阶段2: 验证集从 Top 15 中选出最优
-                            st.caption(f"验证集 ({valid_days} 天) 评估训练 Top {top_n_valid} 参数...")
-                            valid_progress = st.progress(0)
-                            valid_rows = []
-                            for ti in range(top_n_valid):
-                                row = df_train.iloc[ti]
-                                win, la, th, tk = int(row["_win"]), int(row["_la"]), row["_th"], int(row["_tk"])
+                        # 阶段2: 验证集从 Top 15 中选出最优
+                        st.caption(f"验证集 ({valid_days} 天) 评估训练 Top {top_n_valid} 参数...")
+                        valid_progress = st.progress(0)
+                        valid_rows = []
+                        for ti in range(top_n_valid):
+                            row = df_train.iloc[ti]
+                            win, la, th, tk = int(row["_win"]), int(row["_la"]), row["_th"], int(row["_tk"])
+                            vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
+                            combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
+                            results_t = _eval_trial(
+                                win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                combined_corr, price_vals_t, n_tune,
+                                valid_start, valid_end,
+                            )
+                            metrics = _compute_metrics(results_t)
+                            if metrics:
+                                valid_rows.append({
+                                    "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
+                                    "训练段命中率%": row["训练段命中率%"],
+                                    "验证段命中率%": metrics["段命中率%"],
+                                    "验证段数": metrics["信号段数"],
+                                    "验证命中段数": metrics["命中段数"],
+                                    "训练原始命中率%": row["训练原始命中率%"],
+                                    "验证原始命中率%": metrics["原始命中率%"],
+                                    "训练信号段数": row["训练信号段数"],
+                                    "验证有效日": metrics["有效信号日"],
+                                    "验证中性日": metrics["中性日"],
+                                    "_win": win, "_la": la, "_th": th, "_tk": tk,
+                                })
+                            valid_progress.progress((ti + 1) / top_n_valid)
+
+                        if not valid_rows:
+                            st.warning("验证集未找到任何有效参数组合")
+                        else:
+                            df_valid = pd.DataFrame(valid_rows)
+                            df_valid["_wilson"] = df_valid.apply(
+                                lambda r: _wilson_lower(int(r["验证命中段数"]), int(r["验证段数"])), axis=1
+                            )
+                            df_valid = df_valid.sort_values("_wilson", ascending=False)
+
+                            # 阶段3: 测试集对 Top 5 参数评估
+                            top_n_test = min(5, len(df_valid))
+                            st.caption(f"测试集 ({test_days} 天) 对验证 Top {top_n_test} 参数做无偏评估...")
+                            test_progress = st.progress(0)
+                            test_rows = []
+                            for ti in range(top_n_test):
+                                vrow = df_valid.iloc[ti]
+                                win, la, th, tk = int(vrow["_win"]), int(vrow["_la"]), vrow["_th"], int(vrow["_tk"])
                                 vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
                                 combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
                                 results_t = _eval_trial(
-                                    win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
-                                    combined_corr, price_vals_t, n_tune,
-                                    valid_start, valid_end,
+                                    win, la, th, tk, bt_algo, bt_factors,
+                                    vals_dict_t, combined_corr, price_vals_t, n_tune,
+                                    test_start, tune_end,
                                 )
-                                metrics = _compute_metrics(results_t)
-                                if metrics:
-                                    valid_rows.append({
+                                test_metrics = _compute_metrics(results_t)
+                                if test_metrics:
+                                    test_rows.append({
                                         "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
-                                        "训练段命中率%": row["训练段命中率%"],
-                                        "验证段命中率%": metrics["段命中率%"],
-                                        "验证段数": metrics["信号段数"],
-                                        "验证命中段数": metrics["命中段数"],
-                                        "训练原始命中率%": row["训练原始命中率%"],
-                                        "验证原始命中率%": metrics["原始命中率%"],
-                                        "训练信号段数": row["训练信号段数"],
-                                        "验证有效日": metrics["有效信号日"],
-                                        "验证中性日": metrics["中性日"],
+                                        "训练段命中率%": vrow["训练段命中率%"],
+                                        "验证段命中率%": vrow["验证段命中率%"],
+                                        "测试段命中率%": test_metrics["段命中率%"],
+                                        "训练原始%": vrow["训练原始命中率%"],
+                                        "验证原始%": vrow["验证原始命中率%"],
+                                        "测试原始%": test_metrics["原始命中率%"],
+                                        "训练信号段": vrow["训练信号段数"],
+                                        "验证信号段": vrow["验证段数"],
+                                        "测试信号段": test_metrics["信号段数"],
+                                        "验证Wilson": round(vrow["_wilson"] * 100, 1),
                                         "_win": win, "_la": la, "_th": th, "_tk": tk,
                                     })
-                                valid_progress.progress((ti + 1) / top_n_valid)
+                                test_progress.progress((ti + 1) / top_n_test)
 
-                            if not valid_rows:
-                                st.warning("验证集未找到任何有效参数组合")
+                            if not test_rows:
+                                st.warning("测试集未找到有效信号")
                             else:
-                                df_valid = pd.DataFrame(valid_rows)
-                                df_valid["_wilson"] = df_valid.apply(
-                                    lambda r: _wilson_lower(int(r["验证命中段数"]), int(r["验证段数"])), axis=1
+                                st.session_state.tune_df = pd.DataFrame(test_rows)
+                                st.session_state.tune_valid_df = df_valid  # 缓存验证集详情
+
+                                st.subheader(f"三段切分 Top {len(test_rows)} 参数 (训练 → 验证 → 测试)")
+                                st.caption("验证集按 Wilson 下界排序选 Top 5, 测试集全程未参与选参, 为无偏 out-of-sample 估计")
+                                show_cols = [c for c in st.session_state.tune_df.columns if not c.startswith("_")]
+                                st.dataframe(
+                                    st.session_state.tune_df[show_cols],
+                                    width='stretch',
+                                    hide_index=True,
+                                    column_config={
+                                        "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "验证段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "测试段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "训练原始%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "验证原始%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "测试原始%": st.column_config.NumberColumn(format="%.1f%%"),
+                                        "验证Wilson": st.column_config.NumberColumn("验证Wilson下界%", format="%.1f",
+                                            help="95%置信区间下界, 段数少时自动惩罚"),
+                                    }
                                 )
-                                df_valid = df_valid.sort_values("_wilson", ascending=False)
 
-                                # 阶段3: 测试集对 Top 5 参数评估
-                                top_n_test = min(5, len(df_valid))
-                                st.caption(f"测试集 ({test_days} 天) 对验证 Top {top_n_test} 参数做无偏评估...")
-                                test_progress = st.progress(0)
-                                test_rows = []
-                                for ti in range(top_n_test):
-                                    vrow = df_valid.iloc[ti]
-                                    win, la, th, tk = int(vrow["_win"]), int(vrow["_la"]), vrow["_th"], int(vrow["_tk"])
-                                    vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                                    combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
-                                    results_t = _eval_trial(
-                                        win, la, th, tk, bt_algo, bt_factors,
-                                        vals_dict_t, combined_corr, price_vals_t, n_tune,
-                                        test_start, tune_end,
-                                    )
-                                    test_metrics = _compute_metrics(results_t)
-                                    if test_metrics:
-                                        test_rows.append({
-                                            "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
-                                            "训练段命中率%": vrow["训练段命中率%"],
-                                            "验证段命中率%": vrow["验证段命中率%"],
-                                            "测试段命中率%": test_metrics["段命中率%"],
-                                            "训练原始%": vrow["训练原始命中率%"],
-                                            "验证原始%": vrow["验证原始命中率%"],
-                                            "测试原始%": test_metrics["原始命中率%"],
-                                            "训练信号段": vrow["训练信号段数"],
-                                            "验证信号段": vrow["验证段数"],
-                                            "测试信号段": test_metrics["信号段数"],
-                                            "验证Wilson": round(vrow["_wilson"] * 100, 1),
-                                            "_win": win, "_la": la, "_th": th, "_tk": tk,
-                                        })
-                                    test_progress.progress((ti + 1) / top_n_test)
-
-                                if not test_rows:
-                                    st.warning("测试集未找到有效信号")
-                                else:
-                                    st.session_state.tune_df = pd.DataFrame(test_rows)
-                                    st.session_state.tune_valid_df = df_valid  # 缓存验证集详情
-
-                                    st.subheader(f"三段切分 Top {len(test_rows)} 参数 (训练 → 验证 → 测试)")
-                                    st.caption("验证集按 Wilson 下界排序选 Top 5, 测试集全程未参与选参, 为无偏 out-of-sample 估计")
-                                    show_cols = [c for c in st.session_state.tune_df.columns if not c.startswith("_")]
+                                with st.expander("验证集 Top 5 参数 (按 Wilson 下界排序)"):
+                                    vshow = [c for c in df_valid.columns if not c.startswith("_") or c == "_wilson"]
                                     st.dataframe(
-                                        st.session_state.tune_df[show_cols],
+                                        df_valid[vshow].head(5),
                                         width='stretch',
                                         hide_index=True,
                                         column_config={
                                             "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
                                             "验证段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                            "测试段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                            "训练原始%": st.column_config.NumberColumn(format="%.1f%%"),
-                                            "验证原始%": st.column_config.NumberColumn(format="%.1f%%"),
-                                            "测试原始%": st.column_config.NumberColumn(format="%.1f%%"),
-                                            "验证Wilson": st.column_config.NumberColumn("验证Wilson下界%", format="%.1f",
-                                                help="95%置信区间下界, 段数少时自动惩罚"),
+                                            "训练原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                            "验证原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                                            "_wilson": st.column_config.NumberColumn("验证Wilson下界", format="%.3f"),
                                         }
                                     )
-
-                                    with st.expander("验证集 Top 5 参数 (按 Wilson 下界排序)"):
-                                        vshow = [c for c in df_valid.columns if not c.startswith("_") or c == "_wilson"]
-                                        st.dataframe(
-                                            df_valid[vshow].head(5),
-                                            width='stretch',
-                                            hide_index=True,
-                                            column_config={
-                                                "训练段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                                "验证段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                                "训练原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                                "验证原始命中率%": st.column_config.NumberColumn(format="%.1f%%"),
-                                                "_wilson": st.column_config.NumberColumn("验证Wilson下界", format="%.3f"),
-                                            }
-                                        )
 # Tab 8: 数据表格
 # ===========================================================================
 if tab_idx == 8:
