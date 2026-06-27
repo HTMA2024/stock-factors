@@ -1385,27 +1385,10 @@ if tab_idx == 7:
 
         # ---- 去重叠统计 ----
         if len(df_signal) > 0:
-            df_sig_sorted = df_signal.sort_values("date")
-            df_sig_sorted["pred_sign"] = np.sign(df_sig_sorted["pred_return"].fillna(0))
-            df_sig_sorted["segment"] = (df_sig_sorted["pred_sign"] != df_sig_sorted["pred_sign"].shift(1)).cumsum()
-            segments = df_sig_sorted.groupby("segment").agg(
-                起始日期=("date", "first"),
-                结束日期=("date", "last"),
-                持续天数=("date", "count"),
-                预测方向=("pred_sign", "first"),
-                命中天数=("hit", "sum"),
-                平均预测收益=("pred_return", "mean"),
-                平均实际收益=("actual_return", "mean"),
-            )
-            segments["预测方向"] = segments["预测方向"].map({1: "看涨", -1: "看跌"})
-            seg_total = len(segments)
-            seg_hits = (segments["命中天数"] > segments["持续天数"] / 2).sum()
-            seg_hitrate = seg_hits / seg_total * 100 if seg_total > 0 else 0
+            df_sig_sorted = df_signal.sort_values("date")  # 下方图表复用
+            seg_total, seg_hits, seg_hitrate, test_seg_avg_days = _segment_stats(df_signal)
         else:
-            seg_total = 0
-            seg_hits = 0
-            seg_hitrate = 0
-            segments = pd.DataFrame()
+            seg_total, seg_hits, seg_hitrate, test_seg_avg_days = 0, 0, 0.0, 0.0
             df_sig_sorted = df_signal
 
         st.divider()
