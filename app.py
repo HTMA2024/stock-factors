@@ -1786,20 +1786,101 @@ if tab_idx == 7:
                     total_trials = len(windows) * len(lookaheads) * len(thresholds) * len(topks)
                     algo_label = {"pearson": "Pearson", "dtw": "DTW", "pearson_dtw": "Pearson+DTW"}.get(bt_algo, bt_algo)
 
-                    # LightGBM 自动权重学习
-                    if use_lgbm and len(bt_factors) > 1:
-                        with st.spinner("🤖 LightGBM 学习因子权重..."):
-                            price_vals_t = df_factors.loc[valid_tune.index, "close"].values
-                            learned = _learn_weights(
-                                valid_tune, bt_factors, bt_window, bt_lookahead,
-                                bt_threshold, bt_topk, price_vals_t, n_tune,
-                                tune_start, train_end,  # 用训练集学权重
+                    price_vals_t = df_factors.loc[valid_tune.index, "close"].values
+                    n_factors = len(bt_factors)
+
+                    if use_lgbm and n_factors > 1:
+                        # ===== 联合优化: Optuna 同时搜权重 + 参数 =====
+                        import optuna
+                        optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+                        # 预计算各因子独立相关矩阵缓存 (按 window 分组)
+                        factor_mats_cache = {}
+                        vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
+                        for win in windows:
+                            mats = []
+                            for f in bt_factors:
+                                vals = vals_dict_t[f]
+                                W = np.lib.stride_tricks.sliding_window_view(vals, win)
+                                mean = W.mean(axis=1, keepdims=True)
+                                std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
+                                Wz = (W - mean) / std
+                                mats.append((Wz @ Wz.T) / (win - 1))
+                            factor_mats_cache[win] = mats
+
+                        def optuna_objective(trial):
+                            win = trial.suggest_categorical("win", windows)
+                            la = trial.suggest_categorical("la", lookaheads)
+                            th = trial.suggest_float("th", 0.65, 0.95)
+                            tk = trial.suggest_categorical("tk", topks)
+                            raw_w = [trial.suggest_float(f"w_{i}", 0.0, 1.0) for i in range(n_factors)]
+                            total_w = sum(raw_w)
+                            if total_w == 0:
+                                return 0.0
+                            w_list = [r / total_w for r in raw_w]
+
+                            # 加权相关矩阵
+                            combined_corr = sum(w_list[i] * factor_mats_cache[win][i] for i in range(n_factors))
+
+                            # 快速回测 (训练集)
+                            results_t = _eval_trial(
+                                win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                combined_corr, price_vals_t, n_tune,
+                                tune_start, train_end,
                             )
-                            if learned:
-                                bt_weight_list = [learned.get(f, 0) for f in bt_factors]
-                                st.caption("LightGBM 权重: " + " | ".join(f"{f}: {learned[f]:.0%}" for f in bt_factors))
-                            else:
-                                st.caption("LightGBM 数据不足, 使用等权")
+                            metrics = _compute_metrics(results_t)
+                            if not metrics:
+                                return 0.0
+                            return metrics["段命中率%"]
+
+                        n_optuna_trials = 200
+                        st.caption(f"算法: {algo_label} + Optuna 联合优化 | 三段切分: 训练 {train_days}天 → 验证 {valid_days}天 → 测试 {test_days}天 | 搜索 {n_optuna_trials} 次...")
+                        with st.spinner(f"🤖 Optuna 联合搜索权重+参数 ({n_optuna_trials} trials)..."):
+                            opt_progress = st.progress(0)
+                            trial_count = [0]
+                            def progress_callback(study, trial):
+                                trial_count[0] += 1
+                                opt_progress.progress(trial_count[0] / n_optuna_trials)
+
+                            study = optuna.create_study(direction="maximize")
+                            study.optimize(optuna_objective, n_trials=n_optuna_trials,
+                                          callbacks=[progress_callback], show_progress_bar=False)
+
+                        # 提取 Top 15 参数组合
+                        train_results = []
+                        for trial in sorted(study.trials, key=lambda t: t.value if t.value is not None else -1, reverse=True)[:15]:
+                            params = trial.params
+                            win, la, th, tk = params["win"], params["la"], params["th"], params["tk"]
+                            raw_w = [params[f"w_{i}"] for i in range(n_factors)]
+                            total_w = sum(raw_w)
+                            w_list = [r / total_w for r in raw_w] if total_w > 0 else [1/n_factors]*n_factors
+
+                            combined_corr = sum(w_list[i] * factor_mats_cache[win][i] for i in range(n_factors))
+                            results_t = _eval_trial(
+                                win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                combined_corr, price_vals_t, n_tune,
+                                tune_start, train_end,
+                            )
+                            metrics = _compute_metrics(results_t)
+                            if metrics:
+                                train_results.append({
+                                    "窗口": win, "预测天": la, "阈值": round(th, 2), "TopK": tk,
+                                    "训练段命中率%": metrics["段命中率%"],
+                                    "训练原始命中率%": metrics["原始命中率%"],
+                                    "训练信号段数": metrics["信号段数"],
+                                    "训练有效日": metrics["有效信号日"],
+                                    "训练中性日": metrics["中性日"],
+                                    "_win": win, "_la": la, "_th": th, "_tk": tk,
+                                    "_weights": w_list,
+                                })
+
+                        # 显示最优权重
+                        if train_results:
+                            best_w = train_results[0]["_weights"]
+                            st.caption("Optuna 最优权重: " + " | ".join(f"{f}: {w:.0%}" for f, w in zip(bt_factors, best_w)))
+
+                    else:
+                        # ===== 网格搜索 (等权或手动权重) =====
                     st.caption(f"算法: {algo_label} | 三段切分: 训练 {train_days}天 → 验证 {valid_days}天 → 测试 {test_days}天 | 搜索 {total_trials} 种参数组合...")
 
                     price_vals_t = df_factors.loc[valid_tune.index, "close"].values
