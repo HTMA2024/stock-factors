@@ -1789,7 +1789,7 @@ if tab_idx == 7:
                     if use_lgbm and len(bt_factors) > 1:
                         with st.spinner("🤖 LightGBM 学习因子权重..."):
                             price_vals_t = df_factors.loc[valid_tune.index, "close"].values
-                            learned = _lgbm_weights(
+                            learned = _learn_weights(
                                 valid_tune, bt_factors, bt_window, bt_lookahead,
                                 bt_threshold, bt_topk, price_vals_t, n_tune,
                                 tune_start, train_end,  # 用训练集学权重
