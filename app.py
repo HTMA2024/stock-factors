@@ -1938,7 +1938,7 @@ if tab_idx == 7:
                             # 联合目标: 训练 + 验证各 50%
                             return 0.5 * wilson_train + 0.5 * wilson_valid
 
-                        n_optuna_trials = 200
+                        n_optuna_trials = 400
                         st.caption(f"算法: {algo_label} + Optuna 联合优化 | 三段切分: 训练 {train_days}天 → 验证 {valid_days}天 → 测试 {test_days}天 | 搜索 {n_optuna_trials} 次...")
                         with st.spinner(f"🤖 Optuna 联合搜索权重+参数 ({n_optuna_trials} trials)..."):
                             opt_progress = st.progress(0)
