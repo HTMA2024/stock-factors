@@ -1823,13 +1823,12 @@ if tab_idx == 7:
                                         dtw_scores = []
                                         for mi in np.where(loose_mask)[0]:
                                             dtw_sim = 0.0
-                                            for f in bt_factors:
+                                            for fi, f in enumerate(bt_factors):
                                                 tpl_v = vals_dict_t[f][t - win:t]
                                                 win_v = vals_dict_t[f][mi:mi + win]
                                                 s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
                                                 if not np.isnan(s):
-                                                    dtw_sim += s
-                                            dtw_sim /= len(bt_factors)
+                                                    dtw_sim += w_list[fi] * s
                                             if dtw_sim >= th:
                                                 dtw_scores.append((mi, dtw_sim))
                                         if dtw_scores:
