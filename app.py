@@ -1724,8 +1724,8 @@ if tab_idx == 7:
                     if not tune_train_results:
                         st.warning("训练集未找到任何有效参数组合")
                     else:
-                        df_tune_train = pd.DataFrame(tune_train_results)
-                        df_tune_train = df_tune_train.sort_values("训练段命中率%", ascending=False)
+                        st.session_state.tune_df = pd.DataFrame(tune_train_results).sort_values("训练段命中率%", ascending=False)
+                        st.session_state.tune_show = True
 
                         # Walk-forward: 对 Top 15 在测试集上评估
                         st.caption(f"对训练集 Top 15 参数组合在测试集 ({test_days} 天) 上验证...")
