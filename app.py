@@ -1071,15 +1071,15 @@ if tab_idx == 7:
                     price_vals = df_factors.loc[valid_bt.index, "close"].values
                     win = bt_window
 
+                    # 择时过滤阈值 (两个 helper 共享)
+                    vol_data, vol_thresh = None, None
+                    if timing_filter:
+                        vol_data = df_factors["vol20d"].reindex(valid_bt.index).fillna(0)
+                        vol_thresh = np.percentile(vol_data[vol_data > 0], 80)
+
                     def _run_bt_fast(eval_start, eval_end, combined_corr):
                         res = []
                         edays = eval_end - eval_start
-                        # 择时过滤: 计算波动率阈值
-                        vol_thresh = None
-                        if timing_filter:
-                            vol_data = df_factors["vol20d"].reindex(valid_bt.index).fillna(0)
-                            vol_thresh = np.percentile(vol_data[vol_data > 0], 80)
-                        lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
                         for ti, t in enumerate(range(eval_start, eval_end)):
                             # 择时过滤
                             if timing_filter and vol_thresh is not None:
