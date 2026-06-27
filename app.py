@@ -1269,6 +1269,7 @@ if tab_idx == 7:
             st.info("测试集无有效信号, 训练集有结果但不在测试集复现 — 可能过拟合了")
 
     if "bt_results" in st.session_state and st.session_state.bt_results is not None:
+        with st.expander("📊 回测结果 (点击展开)", expanded=True):
         df_res = pd.DataFrame(st.session_state.bt_results)
         if "neutral" not in df_res.columns:
             df_res["neutral"] = False
