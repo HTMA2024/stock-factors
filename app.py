@@ -335,12 +335,13 @@ def _classify_hit(direction, avg_pred, actual_return, ensemble, ensemble_neutral
 def _segment_stats(df_signal):
     """信号段去重统计: 连续同向预测合并为段, 段内过半命中才算命中。
 
-    df_signal: 含 date / pred_return / hit 列, 已排除中性日。
+    df_signal: 含 pred_return / hit 列 (已排除中性日)。若含 date 列则按 date 排序,
+    否则按现有行序 (调用方需保证为时间序)。
     返回 (段数, 命中段数, 段命中率%, 段均天数)。
     """
     if len(df_signal) == 0:
         return 0, 0, 0.0, 0.0
-    d = df_signal.sort_values("date")
+    d = df_signal.sort_values("date") if "date" in df_signal.columns else df_signal
     sign = np.sign(d["pred_return"].fillna(0))
     seg_id = (sign != sign.shift(1)).cumsum()
     segs = d.groupby(seg_id)
