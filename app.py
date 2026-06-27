@@ -2156,6 +2156,36 @@ if tab_idx == 7:
                                             "_wilson": st.column_config.NumberColumn("验证Wilson下界", format="%.3f"),
                                         }
                                     )
+
+                                # ---- 时间交叉验证: Top 1 配置在 3 个滚动窗口上验证鲁棒性 ----
+                                if test_rows and not use_lgbm:
+                                    best = test_rows[0]
+                                    win_cv, la_cv, th_cv, tk_cv = int(best["_win"]), int(best["_la"]), best["_th"], int(best["_tk"])
+                                    w_cv = best.get("_weights", bt_weight_list)
+                                    cv_windows = 3
+                                    cv_step = (tune_end - tune_start) // (cv_windows + 2)
+                                    cv_results = []
+                                    for cvi in range(cv_windows):
+                                        cv_start = tune_start + cv_step * cvi
+                                        cv_end = min(tune_start + cv_step * (cvi + 2), tune_end)
+                                        if cv_end - cv_start < 30:
+                                            continue
+                                        vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
+                                        combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win_cv, w_cv)
+                                        results_cv = _eval_trial(
+                                            win_cv, la_cv, th_cv, tk_cv, bt_algo, bt_factors, vals_dict_t,
+                                            combined_corr, price_vals_t, n_tune, cv_start, cv_end, w_cv,
+                                        )
+                                        m = _compute_metrics(results_cv)
+                                        if m and m["信号段数"] > 0:
+                                            cv_results.append(m["段命中率%"])
+                                    if len(cv_results) >= 2:
+                                        st.caption(f"时间交叉验证 (Top 1 配置, {len(cv_results)} 个滚动窗口)")
+                                        cv_cols = st.columns(len(cv_results))
+                                        for cvi, cvr in enumerate(cv_results):
+                                            with cv_cols[cvi]:
+                                                st.metric(f"窗口{cvi+1}", f"{cvr:.0f}%")
+                                        st.caption(f"均值 {np.mean(cv_results):.0f}% ± {np.std(cv_results):.0f}% (std)")
 # Tab 8: 数据表格
 # ===========================================================================
 if tab_idx == 8:
