@@ -1164,7 +1164,7 @@ if tab_idx == 7:
                 regime_labels[(close_all > ma250_all) & ma60_rising] = "牛市"
                 regime_labels[(close_all < ma250_all) & ~ma60_rising] = "熊市"
             regime_series = pd.Series(regime_labels, index=valid_bt.index)
-            st.caption(f"趋势分层: 牛市 {(regime_labels=='牛市').sum()} 天, 熊市 {(regime_labels=='熊市').sum()} 天, 震荡 {(regime_labels=='震荡').sum()} 天")
+            st.session_state.regime_series = regime_series  # 持久化供展示用
             n = len(valid_bt)
 
             if n < bt_window * 5:
