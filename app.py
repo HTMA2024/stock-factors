@@ -1466,16 +1466,38 @@ if tab_idx == 7:
 
         st.divider()
         st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段 (中性日已排除), 仅段首日命中即算正确 (避免重叠模板重复投票虚高)")
-        if has_train and len(df_train_sig) > 0:
+        if has_threeway and len(df_train_sig) > 0 and len(df_valid_sig) > 0:
             train_seg_total, train_seg_hits, train_seg_rate, train_seg_avg_days = _segment_stats(df_train_sig)
-            # 第一行: 训练段
+            valid_seg_total, valid_seg_hits, valid_seg_rate, valid_seg_avg_days = _segment_stats(df_valid_sig)
+            # 训练段
             _metric_row([
                 ("训练段命中率", f"{train_seg_rate:.1f}%", None, None),
                 ("训练信号段数", train_seg_total, None, None),
                 ("训练命中段数", train_seg_hits, None, None),
                 ("训练段均天数", f"{train_seg_avg_days:.1f}", None, None),
             ])
-            # 第二行: 测试段
+            # 验证段
+            _metric_row([
+                ("验证段命中率", f"{valid_seg_rate:.1f}%", f"{valid_seg_rate - train_seg_rate:+.1f}% vs 训练", None),
+                ("验证信号段数", valid_seg_total, None, None),
+                ("验证命中段数", valid_seg_hits, None, None),
+                ("验证段均天数", f"{valid_seg_avg_days:.1f}", None, None),
+            ])
+            # 测试段
+            _metric_row([
+                ("测试段命中率", f"{seg_hitrate:.1f}%", f"{seg_hitrate - valid_seg_rate:+.1f}% vs 验证", None),
+                ("测试信号段数", seg_total, None, None),
+                ("测试命中段数", seg_hits, None, None),
+                ("测试段均天数", f"{test_seg_avg_days:.1f}", None, None),
+            ])
+        elif has_train and len(df_train_sig) > 0:
+            train_seg_total, train_seg_hits, train_seg_rate, train_seg_avg_days = _segment_stats(df_train_sig)
+            _metric_row([
+                ("训练段命中率", f"{train_seg_rate:.1f}%", None, None),
+                ("训练信号段数", train_seg_total, None, None),
+                ("训练命中段数", train_seg_hits, None, None),
+                ("训练段均天数", f"{train_seg_avg_days:.1f}", None, None),
+            ])
             _metric_row([
                 ("测试段命中率", f"{seg_hitrate:.1f}%", f"{seg_hitrate - train_seg_rate:+.1f}% vs 训练", None),
                 ("测试信号段数", seg_total, None, None),
