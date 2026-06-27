@@ -1318,15 +1318,18 @@ if tab_idx == 7:
 
                         with st.spinner(f"正在回测 {total_days} 个交易日..."):
                             if walk_forward:
-                                st.caption(f"Walk-forward: 训练集 {train_end - full_start} 天, 测试集 {end_idx - train_end} 天")
+                                st.caption(f"三段切分: 训练 {train_end - full_start}天 → 验证 {valid_end - train_end}天 → 测试 {end_idx - test_start}天")
                                 results_train = _run_bt_slow(full_start, train_end, pearson_mat_bt)
-                                results_test = _run_bt_slow(train_end, end_idx, pearson_mat_bt)
+                                results_valid = _run_bt_slow(train_end, valid_end, pearson_mat_bt)
+                                results_test = _run_bt_slow(test_start, end_idx, pearson_mat_bt)
                                 st.session_state.bt_train_results = results_train if results_train else None
+                                st.session_state.bt_valid_results = results_valid if results_valid else None
                                 st.session_state.bt_results = results_test if results_test else None
                             else:
                                 results = _run_bt_slow(start_idx, end_idx, pearson_mat_bt)
                                 st.session_state.bt_results = results if results else None
                                 st.session_state.bt_train_results = None
+                                st.session_state.bt_valid_results = None
 
     # ---- 回测结果展示 (从缓存读取, 参数变动不清空) ----
     if "tune_df" in st.session_state and st.session_state.tune_df is not None:
