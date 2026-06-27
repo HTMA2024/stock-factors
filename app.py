@@ -1153,6 +1153,8 @@ if tab_idx == 7:
     else:
         bt_weights = {}
 
+    bt_weight_list = [bt_weights.get(f, 0.0) for f in bt_factors] if bt_factors else []
+
     fast_mode = st.checkbox("⚡ 快速模式 (仅 Pearson, 矩阵加速)", value=True, key="bt_fast",
                             help="预计算相关系数矩阵, 秒级出结果。关闭后逐日滑动计算, 较慢但支持 DTW。")
 
