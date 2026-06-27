@@ -1738,6 +1738,7 @@ if tab_idx == 7:
                                     "训练段命中率%": row["训练段命中率%"],
                                     "验证段命中率%": metrics["段命中率%"],
                                     "验证段数": metrics["信号段数"],
+                                    "验证命中段数": metrics["命中段数"],
                                     "训练原始命中率%": row["训练原始命中率%"],
                                     "验证原始命中率%": metrics["原始命中率%"],
                                     "验证有效日": metrics["有效信号日"],
@@ -1750,9 +1751,10 @@ if tab_idx == 7:
                             st.warning("验证集未找到任何有效参数组合")
                         else:
                             df_valid = pd.DataFrame(valid_rows)
-                            df_valid = df_valid.sort_values(
-                                ["验证段命中率%", "验证段数"], ascending=[False, False]
+                            df_valid["_wilson"] = df_valid.apply(
+                                lambda r: _wilson_lower(int(r["验证命中段数"]), int(r["验证段数"])), axis=1
                             )
+                            df_valid = df_valid.sort_values("_wilson", ascending=False)
                             best_row = df_valid.iloc[0]
                             best_win, best_la, best_th, best_tk = (
                                 int(best_row["_win"]), int(best_row["_la"]),
