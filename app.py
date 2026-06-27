@@ -1281,8 +1281,7 @@ if tab_idx == 7:
                                     continue
                                 direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
                                 actual_return = (price_vals[t + eval_la - 1] - price_vals[t]) / price_vals[t]
-                                hit, neutral = _classify_hit(direction, avg_pred, actual_return,
-                                                             ensemble_mode, ensemble_neutral_hit=True)
+                                hit, neutral = _classify_hit(direction, avg_pred, actual_return, ensemble_mode)
                                 res.append({
                                     "date": valid_bt.index[t],
                                     "matches": len(scores),
@@ -1647,7 +1646,7 @@ if tab_idx == 7:
                 valid_tune = df_factors[bt_factors].dropna()
                 n_tune = len(valid_tune)
                 tune_start, tune_end = _resolve_date_range(valid_tune.index, bt_start, bt_end, bt_window * 2)
-                tune_end = min(tune_end, n_tune - max(_bt_lookaheads(15, ensemble_mode)))
+                tune_end = min(tune_end, n_tune - (10 if ensemble_mode else bt_lookahead))
 
                 if tune_end - tune_start < 60:
                     st.warning("数据不足 (walk-forward 需要至少 60 个有效回测日)")
