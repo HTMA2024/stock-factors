@@ -1114,7 +1114,8 @@ if tab_idx == 7:
                                             avg_pred = np.mean(pred_by_la[0])
                                         actual_return = (price_vals[t + bt_lookahead - 1] - price_vals[t]) / price_vals[t]
                                         if ensemble_mode:
-                                            hit = (direction == 1 and actual_return > 0) or (direction == -1 and actual_return < 0) or (direction == 0 and abs(actual_return) < 0.001)
+                                            hit = (direction == 1 and actual_return > 0) or \
+                                                  (direction == -1 and actual_return < 0)
                                             neutral = (direction == 0)
                                         elif abs(avg_pred) < 0.001:
                                             hit, neutral = False, True
