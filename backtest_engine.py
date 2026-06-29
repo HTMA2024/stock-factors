@@ -203,14 +203,11 @@ def compute_metrics(results):
 def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
                combined_corr, price_vals, n_data, eval_start, eval_end,
                w_list=None, ensemble_mode=False, timing_filter=False,
-               vol_data=None, vol_thresh=None):
+               vol_data=None, vol_thresh=None, index=None):
     """
     在 [eval_start, eval_end) 区间内逐日评价策略。
 
-    参数
-    ----
-    combined_corr: 预计算的加权 Pearson 相关矩阵 (用于 Pearson 模式和 DTW 初筛)
-    w_list: 各因子权重, 用于 DTW 加权
+    index: 如提供, 用于给每条结果附加 date 字段
     """
     if w_list is None:
         w_list = [1.0 / len(factor_names)] * len(factor_names)
