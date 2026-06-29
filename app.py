@@ -917,7 +917,7 @@ if tab_idx == 7:
     with c2:
         bt_lookahead = st.slider("预测天数", 1, 20, 5, key="bt_la")
     with c3:
-        bt_threshold = st.slider("相似度阈值", 0.5, 1.0, 0.9, 0.05, key="bt_th")
+        bt_threshold = st.slider("相似度阈值", 0.5, 1.0, 0.9, 0.01, key="bt_th")
     with c4:
         bt_topk = st.slider("Top K 平均", 1, 10, 3, key="bt_k",
                             help="取前 K 个匹配的后续收益率均值作为预测")
