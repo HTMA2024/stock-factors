@@ -2104,7 +2104,7 @@ if tab_idx == 7:
                                     cv_step_t = (tune_end - tune_start) // 5
                                     for cvi in range(3):
                                         cvs = tune_start + cv_step_t * cvi
-                                        cve = min(tune_start + cv_step_t * (cvi + 2), tune_end)
+                                        cve = min(tune_start + cv_step_t * (cvi + 2), valid_end)
                                         if cve - cvs < 30:
                                             continue
                                         vtd = {f: valid_tune[f].values for f in bt_factors}
