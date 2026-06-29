@@ -201,7 +201,6 @@ SIGNAL_FACTORS = ["sig_macross", "sig_rsizone", "sig_volbreak", "sig_macd", "sig
 # ===========================================================================
 # DTW (动态时间规整) 辅助函数
 # ===========================================================================
-from numba import njit
 
 from scipy.stats import pearsonr
 
