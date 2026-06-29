@@ -1045,6 +1045,15 @@ if tab_idx == 7:
                             combined_corr = pearson_corr_matrix([vals_dict[f] for f in bt_factors], win, bt_weight_list)
 
                         if walk_forward:
+                            # 统一评价封装 (调用 backtest_engine.eval_trial)
+                            def _bt_run(es, ee, mat, w=None):
+                                return eval_trial(
+                                    win, bt_lookahead, bt_threshold, bt_topk, bt_algo, bt_factors,
+                                    vals_dict, mat, price_vals, n,
+                                    es, ee, w if w else bt_weight_list,
+                                    ensemble_mode, timing_filter, vol_data, vol_thresh,
+                                )
+
                             st.caption(f"三段切分: 训练 {train_end - full_start}天 → 验证 {valid_end - train_end}天 → 测试 {end_idx - test_start}天")
                             results_train = _run_bt_fast(full_start, train_end, combined_corr)
                             results_valid = _run_bt_fast(train_end, valid_end, combined_corr)
