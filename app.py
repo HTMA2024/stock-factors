@@ -1285,7 +1285,7 @@ if tab_idx == 7:
         # ---- 趋势分层命中率 ----
         if "regime_series" in st.session_state and st.session_state.regime_series is not None and len(df_res) > 0:
             df_res_sorted = df_res.sort_values("date").copy()
-            df_res_sorted["regime"] = regime_series.reindex(df_res_sorted["date"]).values
+            df_res_sorted["regime"] = st.session_state.regime_series.reindex(df_res_sorted["date"]).values
             by_regime = df_res_sorted.groupby("regime").agg(总数=("hit", "count"), 命中=("hit", "sum"))
             by_regime["命中率%"] = (by_regime["命中"] / by_regime["总数"] * 100).round(1)
             st.caption("趋势分层命中率")
