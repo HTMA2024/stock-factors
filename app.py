@@ -1439,7 +1439,7 @@ if tab_idx == 7:
                                 st.session_state.bt_valid_results = results_valid if results_valid else None
                                 st.session_state.bt_results = results_test if results_test else None
                             else:
-                                results = _run_bt_slow(start_idx, end_idx, pearson_mat_bt)
+                                results = _run_bt_slow(start_idx, end_idx, pearson_mat_bt, bt_weight_list)
                                 st.session_state.bt_results = results if results else None
                                 st.session_state.bt_train_results = None
                                 st.session_state.bt_valid_results = None
