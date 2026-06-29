@@ -2099,6 +2099,25 @@ if tab_idx == 7:
                                 )
                                 test_metrics = _compute_metrics(results_t)
                                 if test_metrics:
+                                    # 时间交叉验证: 3 个滚动窗口
+                                    cv_hits = []
+                                    cv_step_t = (tune_end - tune_start) // 5
+                                    for cvi in range(3):
+                                        cvs = tune_start + cv_step_t * cvi
+                                        cve = min(tune_start + cv_step_t * (cvi + 2), tune_end)
+                                        if cve - cvs < 30:
+                                            continue
+                                        vtd = {f: valid_tune[f].values for f in bt_factors}
+                                        cv_corr = _pearson_corr_matrix([vtd[f] for f in bt_factors], win, w_list)
+                                        cv_res = _eval_trial(
+                                            win, la, th, tk, bt_algo, bt_factors, vtd,
+                                            cv_corr, price_vals_t, n_tune, cvs, cve, w_list,
+                                        )
+                                        cm = _compute_metrics(cv_res)
+                                        if cm and cm["信号段数"] > 0:
+                                            cv_hits.append(cm["段命中率%"])
+                                    cv_str = f"{np.mean(cv_hits):.0f}%±{np.std(cv_hits):.0f}" if len(cv_hits) >= 2 else "-"
+
                                     w_str = " | ".join(f"{f}:{w:.0%}" for f, w in zip(bt_factors, w_list))
                                     test_rows.append({
                                         "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
@@ -2106,6 +2125,7 @@ if tab_idx == 7:
                                         "训练段命中率%": vrow["训练段命中率%"],
                                         "验证段命中率%": vrow["验证段命中率%"],
                                         "测试段命中率%": test_metrics["段命中率%"],
+                                        "CV均值±std": cv_str,
                                         "训练原始%": vrow["训练原始命中率%"],
                                         "验证原始%": vrow["验证原始命中率%"],
                                         "测试原始%": test_metrics["原始命中率%"],
