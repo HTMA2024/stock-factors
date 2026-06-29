@@ -19,6 +19,13 @@ from data_fetcher import (
     correct_ohlcv_prices,
 )
 from factor_engine import compute_all_factors
+from backtest_engine import (
+    dtw_distance, lb_keogh, dtw_similarity,
+    compute_similarity, pearson_corr_matrix,
+    bt_lookaheads, ensemble_dir, predict_direction, classify_hit,
+    segment_stats, wilson_lower, resolve_date_range, compute_metrics,
+    eval_trial,
+)
 
 # ===========================================================================
 # 页面配置
@@ -197,273 +204,10 @@ SIGNAL_FACTORS = ["sig_macross", "sig_rsizone", "sig_volbreak", "sig_macd", "sig
 from numba import njit
 
 @njit
-def _dtw_distance(s1: np.ndarray, s2: np.ndarray, w: int = 2) -> float:
-    """Sakoe-Chiba 约束 DTW 距离, JIT 编译加速"""
-    n, m = len(s1), len(s2)
-    w = max(w, abs(n - m))
-    dtw = np.full((n + 1, m + 1), np.inf)
-    dtw[0, 0] = 0
-    for i in range(1, n + 1):
-        for j in range(max(1, i - w), min(m + 1, i + w)):
-            cost = abs(s1[i - 1] - s2[j - 1])
-            dtw[i, j] = cost + min(dtw[i - 1, j], dtw[i, j - 1], dtw[i - 1, j - 1])
-    return dtw[n, m]
-
-
 @njit
-def _lb_keogh(s1: np.ndarray, s2: np.ndarray, w: int = 2) -> float:
-    """LB_Keogh 下界: O(n) 快速估算 DTW 最小距离, 用于剪枝 (零精度损失)"""
-    n = len(s1)
-    U = np.empty(n)
-    L = np.empty(n)
-    for i in range(n):
-        lo = max(0, i - w)
-        hi = min(n, i + w + 1)
-        U[i] = np.max(s1[lo:hi])
-        L[i] = np.min(s1[lo:hi])
-    lb = 0.0
-    for i in range(n):
-        if s2[i] > U[i]:
-            d = s2[i] - U[i]
-            lb += d * d
-        elif s2[i] < L[i]:
-            d = L[i] - s2[i]
-            lb += d * d
-    return np.sqrt(lb)
-
-
-def _dtw_similarity(s1: np.ndarray, s2: np.ndarray, w: int = 2,
-                     min_similarity: float = 0.0) -> float:
-    """DTW 距离转相似度 [0, 1], LB_Keogh 剪枝加速"""
-    s1z = (s1 - np.mean(s1)) / (np.std(s1) + 1e-9)
-    s2z = (s2 - np.mean(s2)) / (np.std(s2) + 1e-9)
-    norm = 3.0 * len(s1)
-
-    # LB_Keogh 剪枝: 下界已经超过阈值所需距离, 直接返回低分
-    if min_similarity > 0:
-        max_dist = norm * (1.0 / min_similarity - 1.0)
-        if _lb_keogh(s1z, s2z, w) > max_dist:
-            return 0.0
-
-    dist = _dtw_distance(s1z, s2z, w)
-    return 1.0 / (1.0 + dist / norm)
-
-
-def _compute_single_similarity(tpl_vals: np.ndarray, win_vals: np.ndarray,
-                                algo: str = "pearson", dtw_w: int = 2) -> float:
-    """统一相似度接口: pearson 或 dtw, 返回值范围 [0, 1]"""
-    if np.std(tpl_vals) == 0 or np.std(win_vals) == 0:
-        return np.nan
-    if algo == "dtw":
-        return _dtw_similarity(tpl_vals, win_vals, dtw_w)
-    else:
-        r, _ = pearsonr(tpl_vals, win_vals)
-        return (r + 1) / 2  # Pearson [-1,1] -> [0,1]
-
-
 from scipy.stats import pearsonr
 
 # ---- 策略增强辅助函数 ----
-def _bt_lookaheads(bt_la, ensemble):
-    return (3, 5, 10) if ensemble else (bt_la,)
-
-def _ensemble_dir(pred_rets_by_la):
-    """pred_rets_by_la: list of lists, each inner list is returns for one lookahead"""
-    all_r = [r for la_rets in pred_rets_by_la for r in la_rets]
-    bullish = sum(1 for r in all_r if r > 0)
-    bearish = sum(1 for r in all_r if r < 0)
-    if bullish > bearish: return 1
-    if bearish > bullish: return -1
-    return 0
-
-
-def _pearson_corr_matrix(value_arrays, win, weights=None):
-    """多因子滑动窗口 Pearson 相关矩阵 (加权平均)。
-    value_arrays: list of 1D np.ndarray, 每个因子一条序列。
-    weights: 各因子权重, 默认等权。
-    """
-    n_win = len(value_arrays[0]) - win + 1
-    if weights is None:
-        weights = [1.0 / len(value_arrays)] * len(value_arrays)
-    mat = np.zeros((n_win, n_win))
-    for vals, w in zip(value_arrays, weights):
-        W = np.lib.stride_tricks.sliding_window_view(vals, win)
-        mean = W.mean(axis=1, keepdims=True)
-        std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
-        Wz = (W - mean) / std
-        mat += w * (Wz @ Wz.T) / (win - 1)
-    return mat
-
-
-def _learn_weights(valid_data, bt_factors, win, la, th, tk, price_vals, n, eval_start, eval_end):
-    """用 Optuna 搜索最优因子权重。
-    目标函数: 信号段命中率 (直接优化回测目标, 无采样偏差/目标错位)。
-    """
-    import optuna
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-    vals_dict = {f: valid_data[f].values for f in bt_factors}
-    n_factors = len(bt_factors)
-
-    # 预计算各因子独立的相关矩阵 (O(n²) 一次, 后续加权只需线性组合)
-    factor_mats = []
-    for f in bt_factors:
-        vals = vals_dict[f]
-        W = np.lib.stride_tricks.sliding_window_view(vals, win)
-        mean = W.mean(axis=1, keepdims=True)
-        std = W.std(axis=1, ddof=1, keepdims=True) + 1e-9
-        Wz = (W - mean) / std
-        factor_mats.append((Wz @ Wz.T) / (win - 1))
-
-    def objective(trial):
-        # 搜索权重 (单纯形约束: sum=1, each >= 0)
-        raw = [trial.suggest_float(f"w_{i}", 0.0, 1.0) for i in range(n_factors)]
-        total = sum(raw)
-        if total == 0:
-            return 0.0
-        w = [r / total for r in raw]
-
-        # 加权相关矩阵
-        corr = sum(w[i] * factor_mats[i] for i in range(n_factors))
-
-        # 快速回测 (仅训练集)
-        hits = []
-        for t in range(eval_start, eval_end):
-            tpl_idx = t - win
-            hist_end = tpl_idx - win
-            if hist_end < 0:
-                continue
-            row = corr[tpl_idx, :hist_end + 1]
-            row_sim = (row + 1) / 2
-            match_idx = np.where(row_sim >= th)[0]
-            if len(match_idx) == 0:
-                continue
-            top_k = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
-
-            pred_rets = []
-            for s_idx in top_k:
-                s_end = s_idx + win - 1
-                if s_end + 1 + la <= n:
-                    pred_rets.append((price_vals[s_end + la] - price_vals[s_end + 1]) / price_vals[s_end + 1])
-            if not pred_rets:
-                continue
-
-            avg_pred = np.mean(pred_rets)
-            if t + la > n:
-                continue
-            act_ret = (price_vals[t + la - 1] - price_vals[t]) / price_vals[t]
-            hit = (avg_pred > 0 and act_ret > 0) or (avg_pred < 0 and act_ret < 0)
-            hits.append(1 if hit else 0)
-
-        if len(hits) < 5:
-            return 0.0
-        return sum(hits) / len(hits)
-
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=50, show_progress_bar=False)
-
-    # 提取最优权重
-    best_raw = [study.best_params[f"w_{i}"] for i in range(n_factors)]
-    total = sum(best_raw)
-    if total == 0:
-        return None
-    best_w = [r / total for r in best_raw]
-    return dict(zip(bt_factors, best_w))
-
-
-def _predict_direction(pred_by_la, ensemble):
-    """从各 lookahead 的后续收益列表计算 (direction, avg_pred)。
-
-    pred_by_la: 已过滤空列表的 list[list[float]]。
-    ensemble=True 时用多窗口投票得 direction; 否则 direction=0 仅用 avg_pred。
-    """
-    if ensemble:
-        direction = _ensemble_dir(pred_by_la)
-        mid = len(pred_by_la) // 2
-        avg_pred = np.mean(pred_by_la[mid]) if pred_by_la[mid] else 0
-    else:
-        direction = 0
-        avg_pred = np.mean(pred_by_la[0])
-    return direction, avg_pred
-
-
-def _classify_hit(direction, avg_pred, actual_return, ensemble, ensemble_neutral_hit=False):
-    """统一命中/中性判定, 返回 (hit, neutral)。
-
-    ensemble_neutral_hit: 仅为保留慢速模式历史行为 (direction==0 且实际近乎持平
-    也算命中)。设为 False 即与 fast / 自动调参路径一致 (推荐)。
-    """
-    if ensemble:
-        hit = (direction == 1 and actual_return > 0) or \
-              (direction == -1 and actual_return < 0)
-        if ensemble_neutral_hit:
-            hit = hit or (direction == 0 and abs(actual_return) < 0.001)
-        neutral = (direction == 0)
-    elif abs(avg_pred) < 0.001:
-        hit, neutral = False, True
-    else:
-        hit = (avg_pred > 0 and actual_return > 0) or \
-              (avg_pred < 0 and actual_return < 0)
-        neutral = False
-    return hit, neutral
-
-
-def _segment_stats(df_signal):
-    """信号段去重统计: 连续同向预测合并为段, 仅以段首日命中判断整段是否正确。
-
-    df_signal: 含 pred_return / hit 列 (已排除中性日)。若含 date 列则按 date 排序,
-    否则按现有行序 (调用方需保证为时间序)。
-    返回 (段数, 命中段数, 段命中率%, 段均天数)。
-    """
-    if len(df_signal) == 0:
-        return 0, 0, 0.0, 0.0
-    d = df_signal.sort_values("date") if "date" in df_signal.columns else df_signal
-    sign = np.sign(d["pred_return"].fillna(0))
-    seg_id = (sign != sign.shift(1)).cumsum()
-    segs = d.groupby(seg_id)
-    seg_total = len(segs)
-    seg_hits = sum(1 for _, g in segs if g["hit"].iloc[0])
-    seg_rate = seg_hits / seg_total * 100 if seg_total > 0 else 0.0
-    seg_avg_days = segs.size().mean() if seg_total > 0 else 0.0
-    return seg_total, seg_hits, seg_rate, seg_avg_days
-
-
-def _wilson_lower(hits, n, z=1.96):
-    """Wilson 得分区间下界, 对样本量小的命中率自动惩罚。
-    hits=3, n=3 → 0.37; hits=10, n=15 → 0.42; hits=100, n=150 → 0.60; hits→n → p"""
-    if n == 0:
-        return 0.0
-    p = hits / n
-    z2 = z * z
-    denom = 1 + z2 / n
-    center = (p + z2 / (2 * n)) / denom
-    margin = z * np.sqrt(p * (1 - p) / n + z2 / (4 * n * n)) / denom
-    return max(0.0, float(center - margin))
-
-
-def _hit_color(hit, neutral):
-    """命中/未命中/中性 → 颜色 (绿/红/灰)。"""
-    if neutral:
-        return "#9e9e9e"
-    return "#26a69a" if hit else "#ef5350"
-
-
-def _metric_row(specs):
-    """渲染一行指标卡片。specs: list of (label, value, delta, help)，delta/help 可为 None。"""
-    cols = st.columns(len(specs))
-    for col, (label, value, delta, help_) in zip(cols, specs):
-        with col:
-            st.metric(label, value, delta=delta, help=help_)
-
-
-def _resolve_date_range(index, start, end, min_start):
-    """把起止日期解析为 (start_idx, end_idx) 整数位置。start 不早于 min_start。"""
-    s = index.get_indexer([pd.Timestamp(start)], method="bfill")[0]
-    e = index.get_indexer([pd.Timestamp(end)], method="ffill")[0] + 1
-    return max(s, min_start), e
-
-
-# ---- 辅助函数 ----
 def _plotly_chart(fig, height=400):
     """统一渲染 Plotly 图表"""
     fig.update_layout(
@@ -944,7 +688,7 @@ if tab_idx == 6:
                 # pearson_dtw: 预计算 Pearson 矩阵做初筛
                 pearson_mat = None
                 if algo_name == "pearson_dtw":
-                    pearson_mat = _pearson_corr_matrix([valid_df[f].values for f in selected], win,
+                    pearson_mat = pearson_corr_matrix([valid_df[f].values for f in selected], win,
                                                          [weights.get(f, 1.0 / len(selected)) for f in selected])
 
                 for factor in selected:
@@ -958,16 +702,16 @@ if tab_idx == 6:
                     for i in range(win, tpl_pos - win + 2):  # 只搜索模板开始前的窗口
                         w = vals[i - win:i]
                         if algo_name == "dtw":
-                            s = _dtw_similarity(tpl_vals, w, min_similarity=0.5)
+                            s = dtw_similarity(tpl_vals, w, min_similarity=0.5)
                         elif algo_name == "pearson_dtw":
                             tpl_widx = tpl_pos - win + 1
                             cand_widx = i - win
                             if pearson_mat[tpl_widx, cand_widx] >= 0.3:
-                                s = _dtw_similarity(tpl_vals, w, min_similarity=0.5)
+                                s = dtw_similarity(tpl_vals, w, min_similarity=0.5)
                             else:
                                 continue
                         else:
-                            s = _compute_single_similarity(tpl_vals, w, algo_name)
+                            s = compute_similarity(tpl_vals, w, algo_name)
                         if not np.isnan(s):
                             sim_s.iloc[i - 1] = s
                     detail[factor] = sim_s
@@ -1267,7 +1011,7 @@ if tab_idx == 7:
             if n < bt_window * 5:
                 st.warning(f"数据不足 (需要至少 {bt_window * 5} 天, 当前 {n} 天)")
             else:
-                start_idx, end_idx = _resolve_date_range(valid_bt.index, bt_start, bt_end, bt_window * 2)
+                start_idx, end_idx = resolve_date_range(valid_bt.index, bt_start, bt_end, bt_window * 2)
                 # Bug 1 fix: ensemble 模式下 outer loop bound 用 10 天 (ensemble max horizon)
                 end_idx = min(end_idx, n - (10 if ensemble_mode else bt_lookahead))
                 full_start = start_idx  # 记住原始起始位, walk-forward 时切分要用
@@ -1317,7 +1061,7 @@ if tab_idx == 7:
                                     match_scores = row[match_indices]
                                     top_k_idx = match_indices[np.argsort(-match_scores)[:bt_topk]]
                                     top_scores = row[top_k_idx]
-                                    lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
+                                    lheads = bt_lookaheads(bt_lookahead, ensemble_mode)
                                     eval_la = lheads[len(lheads) // 2]
                                     pred_by_la = [[] for _ in lheads]
                                     for s_idx in top_k_idx:
@@ -1328,9 +1072,9 @@ if tab_idx == 7:
                                                 pred_by_la[li].append(r)
                                     pred_by_la = [pr for pr in pred_by_la if pr]
                                     if pred_by_la:
-                                        direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
+                                        direction, avg_pred = predict_direction(pred_by_la, ensemble_mode)
                                         actual_return = (price_vals[t + eval_la - 1] - price_vals[t]) / price_vals[t]
-                                        hit, neutral = _classify_hit(direction, avg_pred, actual_return, ensemble_mode)
+                                        hit, neutral = classify_hit(direction, avg_pred, actual_return, ensemble_mode)
                                         res.append({
                                             "date": valid_bt.index[t], "matches": len(match_indices),
                                             "top_r": top_scores[0], "pred_return": avg_pred,
@@ -1356,7 +1100,7 @@ if tab_idx == 7:
                                 w_sum, w_total = 0.0, 0.0
                                 if bt_algo == "dtw":
                                     for fi, f in enumerate(bt_factors):
-                                        s_val = _dtw_similarity(tpl_vals[f], win_vals[f],
+                                        s_val = dtw_similarity(tpl_vals[f], win_vals[f],
                                                                 min_similarity=bt_threshold)
                                         if not np.isnan(s_val):
                                             w_sum += weights[fi] * s_val
@@ -1364,25 +1108,25 @@ if tab_idx == 7:
                                 elif bt_algo == "pearson_dtw":
                                     if pearson_mat[t - win, s - win] >= 0.3:
                                         for fi, f in enumerate(bt_factors):
-                                            s_val = _dtw_similarity(tpl_vals[f], win_vals[f],
+                                            s_val = dtw_similarity(tpl_vals[f], win_vals[f],
                                                                     min_similarity=bt_threshold)
                                             if not np.isnan(s_val):
                                                 w_sum += weights[fi] * s_val
                                                 w_total += weights[fi]
                                 else:
                                     for fi, f in enumerate(bt_factors):
-                                        s_val = _compute_single_similarity(tpl_vals[f], win_vals[f], bt_algo)
+                                        s_val = compute_similarity(tpl_vals[f], win_vals[f], bt_algo)
                                         if not np.isnan(s_val):
                                             w_sum += weights[fi] * s_val
                                             w_total += weights[fi]
                                 if w_total > 0 and w_sum / w_total >= bt_threshold:
-                                    lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
+                                    lheads = bt_lookaheads(bt_lookahead, ensemble_mode)
                                     futs = [price_vals[s:min(s + la, n)] for la in lheads]
                                     scores.append((w_sum / w_total, s, futs))
                             if scores:
                                 scores.sort(key=lambda x: -x[0])
                                 top = scores[:bt_topk]
-                                lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
+                                lheads = bt_lookaheads(bt_lookahead, ensemble_mode)
                                 eval_la = lheads[len(lheads) // 2]
                                 pred_by_la = [[] for _ in lheads]
                                 for _, _, futs in top:
@@ -1392,9 +1136,9 @@ if tab_idx == 7:
                                 pred_by_la = [pr for pr in pred_by_la if pr]
                                 if not pred_by_la:
                                     continue
-                                direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
+                                direction, avg_pred = predict_direction(pred_by_la, ensemble_mode)
                                 actual_return = (price_vals[t + eval_la - 1] - price_vals[t]) / price_vals[t]
-                                hit, neutral = _classify_hit(direction, avg_pred, actual_return, ensemble_mode)
+                                hit, neutral = classify_hit(direction, avg_pred, actual_return, ensemble_mode)
                                 res.append({
                                     "date": valid_bt.index[t],
                                     "matches": len(scores),
@@ -1409,7 +1153,7 @@ if tab_idx == 7:
                     # ---- 执行回测 ----
                     if fast_mode and bt_algo == "pearson":
                         with st.spinner(f"预计算相关系数矩阵 ({len(bt_factors)} 因子 × {n - win + 1} 窗口)..."):
-                            combined_corr = _pearson_corr_matrix([vals_dict[f] for f in bt_factors], win, bt_weight_list)
+                            combined_corr = pearson_corr_matrix([vals_dict[f] for f in bt_factors], win, bt_weight_list)
 
                         if walk_forward:
                             st.caption(f"三段切分: 训练 {train_end - full_start}天 → 验证 {valid_end - train_end}天 → 测试 {end_idx - test_start}天")
@@ -1427,7 +1171,7 @@ if tab_idx == 7:
                     else:
                         pearson_mat_bt = None
                         if bt_algo == "pearson_dtw":
-                            pearson_mat_bt = _pearson_corr_matrix([vals_dict[f] for f in bt_factors], win, bt_weight_list)
+                            pearson_mat_bt = pearson_corr_matrix([vals_dict[f] for f in bt_factors], win, bt_weight_list)
 
                         with st.spinner(f"正在回测 {total_days} 个交易日..."):
                             if walk_forward:
@@ -1571,7 +1315,7 @@ if tab_idx == 7:
         # ---- 去重叠统计 ----
         if len(df_signal) > 0:
             df_sig_sorted = df_signal.sort_values("date")  # 下方图表复用
-            seg_total, seg_hits, seg_hitrate, test_seg_avg_days = _segment_stats(df_signal)
+            seg_total, seg_hits, seg_hitrate, test_seg_avg_days = segment_stats(df_signal)
         else:
             seg_total, seg_hits, seg_hitrate, test_seg_avg_days = 0, 0, 0.0, 0.0
             df_sig_sorted = df_signal
@@ -1579,8 +1323,8 @@ if tab_idx == 7:
         st.divider()
         st.caption("去重叠统计: 连续同方向预测合并为 1 个信号段 (中性日已排除), 仅段首日命中即算正确 (避免重叠模板重复投票虚高)")
         if has_threeway and len(df_train_sig) > 0 and len(df_valid_sig) > 0:
-            train_seg_total, train_seg_hits, train_seg_rate, train_seg_avg_days = _segment_stats(df_train_sig)
-            valid_seg_total, valid_seg_hits, valid_seg_rate, valid_seg_avg_days = _segment_stats(df_valid_sig)
+            train_seg_total, train_seg_hits, train_seg_rate, train_seg_avg_days = segment_stats(df_train_sig)
+            valid_seg_total, valid_seg_hits, valid_seg_rate, valid_seg_avg_days = segment_stats(df_valid_sig)
             # 训练段
             _metric_row([
                 ("训练段命中率", f"{train_seg_rate:.1f}%", None, None),
@@ -1603,7 +1347,7 @@ if tab_idx == 7:
                 ("测试段均天数", f"{test_seg_avg_days:.1f}", None, None),
             ])
         elif has_train and len(df_train_sig) > 0:
-            train_seg_total, train_seg_hits, train_seg_rate, train_seg_avg_days = _segment_stats(df_train_sig)
+            train_seg_total, train_seg_hits, train_seg_rate, train_seg_avg_days = segment_stats(df_train_sig)
             _metric_row([
                 ("训练段命中率", f"{train_seg_rate:.1f}%", None, None),
                 ("训练信号段数", train_seg_total, None, None),
@@ -1767,7 +1511,7 @@ if tab_idx == 7:
             else:
                 valid_tune = df_factors[bt_factors].dropna()
                 n_tune = len(valid_tune)
-                tune_start, tune_end = _resolve_date_range(valid_tune.index, bt_start, bt_end, bt_window * 2)
+                tune_start, tune_end = resolve_date_range(valid_tune.index, bt_start, bt_end, bt_window * 2)
                 tune_end = min(tune_end, n_tune - (10 if ensemble_mode else bt_lookahead))
 
                 if tune_end - tune_start < 60:
@@ -1794,13 +1538,13 @@ if tab_idx == 7:
                     price_vals_t = df_factors.loc[valid_tune.index, "close"].values
                     n_factors = len(bt_factors)
 
-                    def _eval_trial(win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                    def eval_trial(win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                     combined_corr, price_vals_t, n_tune, eval_start, eval_end,
                                     w_list=None):
                         results_t = []
                         if w_list is None:
                             w_list = [1.0 / len(bt_factors)] * len(bt_factors)
-                        lheads_t = _bt_lookaheads(la, ensemble_mode)
+                        lheads_t = bt_lookaheads(la, ensemble_mode)
                         la_eff = max(lheads_t)
                         la_eval = lheads_t[len(lheads_t) // 2]
                         s_start = max(eval_start, win * 2)
@@ -1831,7 +1575,7 @@ if tab_idx == 7:
                                             for fi, f in enumerate(bt_factors):
                                                 tpl_v = vals_dict_t[f][t - win:t]
                                                 win_v = vals_dict_t[f][mi:mi + win]
-                                                s = _dtw_similarity(tpl_v, win_v, min_similarity=th)
+                                                s = dtw_similarity(tpl_v, win_v, min_similarity=th)
                                                 if not np.isnan(s):
                                                     dtw_sim += w_list[fi] * s
                                             if dtw_sim >= th:
@@ -1857,9 +1601,9 @@ if tab_idx == 7:
                                                 )
                                     pred_by_la = [pr for pr in pred_by_la if pr]
                                     if pred_by_la:
-                                        direction, avg_pred = _predict_direction(pred_by_la, ensemble_mode)
+                                        direction, avg_pred = predict_direction(pred_by_la, ensemble_mode)
                                         act_ret = (price_vals_t[t + la_eval - 1] - price_vals_t[t]) / price_vals_t[t]
-                                        hit, neutral = _classify_hit(direction, avg_pred, act_ret, ensemble_mode)
+                                        hit, neutral = classify_hit(direction, avg_pred, act_ret, ensemble_mode)
                                         results_t.append({
                                             "pred_return": avg_pred,
                                             "actual_return": act_ret,
@@ -1868,14 +1612,14 @@ if tab_idx == 7:
                                         })
                         return results_t
 
-                    def _compute_metrics(results):
+                    def compute_metrics(results):
                         if not results:
                             return None
                         df = pd.DataFrame(results)
                         sig = df[~df["neutral"]]
                         if len(sig) == 0:
                             return None
-                        seg_total, seg_hit, seg_rate, _ = _segment_stats(sig)
+                        seg_total, seg_hit, seg_rate, _ = segment_stats(sig)
                         return {
                             "信号段数": seg_total,
                             "命中段数": seg_hit,
@@ -1919,26 +1663,26 @@ if tab_idx == 7:
                             combined_corr = sum(w_list[i] * factor_mats_cache[win][i] for i in range(n_factors))
 
                             # 训练集 Wilson
-                            results_train = _eval_trial(
+                            results_train = eval_trial(
                                 win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                 combined_corr, price_vals_t, n_tune,
                                 tune_start, train_end, w_list,
                             )
-                            m_train = _compute_metrics(results_train)
+                            m_train = compute_metrics(results_train)
                             if not m_train:
                                 return 0.0
-                            wilson_train = _wilson_lower(m_train["命中段数"], m_train["信号段数"])
+                            wilson_train = wilson_lower(m_train["命中段数"], m_train["信号段数"])
 
                             # 验证集 Wilson
-                            results_valid = _eval_trial(
+                            results_valid = eval_trial(
                                 win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                 combined_corr, price_vals_t, n_tune,
                                 valid_start, valid_end, w_list,
                             )
-                            m_valid = _compute_metrics(results_valid)
+                            m_valid = compute_metrics(results_valid)
                             if not m_valid:
                                 return wilson_train * 0.5  # 验证集无信号, 降权
-                            wilson_valid = _wilson_lower(m_valid["命中段数"], m_valid["信号段数"])
+                            wilson_valid = wilson_lower(m_valid["命中段数"], m_valid["信号段数"])
 
                             # 联合目标: 训练 + 验证各 50%
                             return 0.5 * wilson_train + 0.5 * wilson_valid
@@ -1976,12 +1720,12 @@ if tab_idx == 7:
                             w_list = [r / total_w for r in raw_w] if total_w > 0 else [1/n_factors]*n_factors
 
                             combined_corr = sum(w_list[i] * factor_mats_cache[win][i] for i in range(n_factors))
-                            results_t = _eval_trial(
+                            results_t = eval_trial(
                                 win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                 combined_corr, price_vals_t, n_tune,
                                 tune_start, train_end, w_list,
                             )
-                            metrics = _compute_metrics(results_t)
+                            metrics = compute_metrics(results_t)
                             if metrics:
                                 w_str = " | ".join(f"{f}:{w:.0%}" for f, w in zip(bt_factors, w_list))
                                 train_results.append({
@@ -2012,17 +1756,17 @@ if tab_idx == 7:
 
                         for win in windows:
                             vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                            combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
+                            combined_corr = pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, bt_weight_list)
 
                             for la in lookaheads:
                                 for th in thresholds:
                                     for tk in topks:
-                                        results_t = _eval_trial(
+                                        results_t = eval_trial(
                                             win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                             combined_corr, price_vals_t, n_tune,
                                             tune_start, train_end, bt_weight_list,
                                         )
-                                        metrics = _compute_metrics(results_t)
+                                        metrics = compute_metrics(results_t)
                                         if metrics:
                                             train_results.append({
                                                 "窗口": win, "预测天": la, "阈值": th, "TopK": tk,
@@ -2051,13 +1795,13 @@ if tab_idx == 7:
                             win, la, th, tk = int(row["_win"]), int(row["_la"]), row["_th"], int(row["_tk"])
                             w_list = row.get("_weights", bt_weight_list)
                             vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                            combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, w_list)
-                            results_t = _eval_trial(
+                            combined_corr = pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, w_list)
+                            results_t = eval_trial(
                                 win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                 combined_corr, price_vals_t, n_tune,
                                 valid_start, valid_end, w_list,
                             )
-                            metrics = _compute_metrics(results_t)
+                            metrics = compute_metrics(results_t)
                             if metrics:
                                 w_str = " | ".join(f"{f}:{w:.0%}" for f, w in zip(bt_factors, w_list))
                                 valid_rows.append({
@@ -2082,7 +1826,7 @@ if tab_idx == 7:
                         else:
                             df_valid = pd.DataFrame(valid_rows)
                             df_valid["_wilson"] = df_valid.apply(
-                                lambda r: _wilson_lower(int(r["验证命中段数"]), int(r["验证段数"])), axis=1
+                                lambda r: wilson_lower(int(r["验证命中段数"]), int(r["验证段数"])), axis=1
                             )
                             df_valid = df_valid.sort_values("_wilson", ascending=False)
 
@@ -2096,13 +1840,13 @@ if tab_idx == 7:
                                 win, la, th, tk = int(vrow["_win"]), int(vrow["_la"]), vrow["_th"], int(vrow["_tk"])
                                 w_list = vrow.get("_weights", bt_weight_list)
                                 vals_dict_t = {f: valid_tune[f].values for f in bt_factors}
-                                combined_corr = _pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, w_list)
-                                results_t = _eval_trial(
+                                combined_corr = pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], win, w_list)
+                                results_t = eval_trial(
                                     win, la, th, tk, bt_algo, bt_factors,
                                     vals_dict_t, combined_corr, price_vals_t, n_tune,
                                     test_start, tune_end, w_list,
                                 )
-                                test_metrics = _compute_metrics(results_t)
+                                test_metrics = compute_metrics(results_t)
                                 if test_metrics:
                                     # 时间交叉验证: 3 个滚动窗口
                                     cv_hits = []
@@ -2113,12 +1857,12 @@ if tab_idx == 7:
                                         if cve - cvs < 30:
                                             continue
                                         vtd = {f: valid_tune[f].values for f in bt_factors}
-                                        cv_corr = _pearson_corr_matrix([vtd[f] for f in bt_factors], win, w_list)
-                                        cv_res = _eval_trial(
+                                        cv_corr = pearson_corr_matrix([vtd[f] for f in bt_factors], win, w_list)
+                                        cv_res = eval_trial(
                                             win, la, th, tk, bt_algo, bt_factors, vtd,
                                             cv_corr, price_vals_t, n_tune, cvs, cve, w_list,
                                         )
-                                        cm = _compute_metrics(cv_res)
+                                        cm = compute_metrics(cv_res)
                                         if cm and cm["信号段数"] > 0:
                                             cv_hits.append(cm["段命中率%"])
                                     cv_str = f"{np.mean(cv_hits):.0f}%±{np.std(cv_hits):.0f}" if len(cv_hits) >= 2 else "-"
