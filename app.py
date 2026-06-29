@@ -203,8 +203,6 @@ SIGNAL_FACTORS = ["sig_macross", "sig_rsizone", "sig_volbreak", "sig_macd", "sig
 # ===========================================================================
 from numba import njit
 
-@njit
-@njit
 from scipy.stats import pearsonr
 
 # ---- 策略增强辅助函数 ----
