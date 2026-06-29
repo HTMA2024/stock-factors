@@ -187,6 +187,16 @@ def compute_metrics(results):
     if len(sig) == 0:
         return None
     seg_total, seg_hit, seg_rate, _ = segment_stats(sig)
+    returns = sig["actual_return"].values
+    avg_ret = np.mean(returns) * 100
+    std_ret = np.std(returns) * 100
+    # 年化 Sharpe: 假设每笔交易持有 predict_days 天, 年化系数 sqrt(252/holding_days)
+    holding_days = max(sig["actual_return"].notna().sum() / max(len(sig), 1) * 3, 1)  # 估算持仓天数
+    ann_factor = np.sqrt(252 / max(holding_days, 1))
+    sharpe = (avg_ret / 100) / (std_ret / 100 + 1e-9) * ann_factor
+    wins = returns[returns > 0]
+    losses = returns[returns < 0]
+    win_loss = abs(np.mean(wins) / np.mean(losses)) if len(losses) > 0 and len(wins) > 0 else float('inf')
     return {
         "信号段数": seg_total,
         "命中段数": seg_hit,
@@ -194,6 +204,10 @@ def compute_metrics(results):
         "原始命中率%": round(sig["hit"].sum() / len(sig) * 100, 1),
         "有效信号日": len(sig),
         "中性日": int(df["neutral"].sum()),
+        "均收益%": round(avg_ret, 2),
+        "波动%": round(std_ret, 2),
+        "Sharpe": round(sharpe, 2),
+        "盈亏比": round(win_loss, 2),
     }
 
 
