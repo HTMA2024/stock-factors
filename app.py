@@ -1353,29 +1353,32 @@ if tab_idx == 7:
                             scores = []
                             for s in range(win, t - win + 1):
                                 win_vals = {f: vals_dict[f][s - win:s] for f in bt_factors}
-                                sims = []
+                                w_sum, w_total = 0.0, 0.0
                                 if bt_algo == "dtw":
-                                    for f in bt_factors:
+                                    for fi, f in enumerate(bt_factors):
                                         s_val = _dtw_similarity(tpl_vals[f], win_vals[f],
                                                                 min_similarity=bt_threshold)
                                         if not np.isnan(s_val):
-                                            sims.append(s_val)
+                                            w_sum += weights[fi] * s_val
+                                            w_total += weights[fi]
                                 elif bt_algo == "pearson_dtw":
                                     if pearson_mat[t - win, s - win] >= 0.3:
-                                        for f in bt_factors:
+                                        for fi, f in enumerate(bt_factors):
                                             s_val = _dtw_similarity(tpl_vals[f], win_vals[f],
                                                                     min_similarity=bt_threshold)
                                             if not np.isnan(s_val):
-                                                sims.append(s_val)
+                                                w_sum += weights[fi] * s_val
+                                                w_total += weights[fi]
                                 else:
-                                    for f in bt_factors:
+                                    for fi, f in enumerate(bt_factors):
                                         s_val = _compute_single_similarity(tpl_vals[f], win_vals[f], bt_algo)
                                         if not np.isnan(s_val):
-                                            sims.append(s_val)
-                                if sims and np.mean(sims) >= bt_threshold:
+                                            w_sum += weights[fi] * s_val
+                                            w_total += weights[fi]
+                                if w_total > 0 and w_sum / w_total >= bt_threshold:
                                     lheads = _bt_lookaheads(bt_lookahead, ensemble_mode)
                                     futs = [price_vals[s:min(s + la, n)] for la in lheads]
-                                    scores.append((np.mean(sims), s, futs))
+                                    scores.append((w_sum / w_total, s, futs))
                             if scores:
                                 scores.sort(key=lambda x: -x[0])
                                 top = scores[:bt_topk]
