@@ -1432,9 +1432,9 @@ if tab_idx == 7:
                         with st.spinner(f"正在回测 {total_days} 个交易日..."):
                             if walk_forward:
                                 st.caption(f"三段切分: 训练 {train_end - full_start}天 → 验证 {valid_end - train_end}天 → 测试 {end_idx - test_start}天")
-                                results_train = _run_bt_slow(full_start, train_end, pearson_mat_bt)
-                                results_valid = _run_bt_slow(train_end, valid_end, pearson_mat_bt)
-                                results_test = _run_bt_slow(test_start, end_idx, pearson_mat_bt)
+                                results_train = _run_bt_slow(full_start, train_end, pearson_mat_bt, bt_weight_list)
+                                results_valid = _run_bt_slow(train_end, valid_end, pearson_mat_bt, bt_weight_list)
+                                results_test = _run_bt_slow(test_start, end_idx, pearson_mat_bt, bt_weight_list)
                                 st.session_state.bt_train_results = results_train if results_train else None
                                 st.session_state.bt_valid_results = results_valid if results_valid else None
                                 st.session_state.bt_results = results_test if results_test else None
