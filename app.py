@@ -1491,6 +1491,12 @@ if tab_idx == 7:
                                 mats.append((Wz @ Wz.T) / (win - 1))
                             factor_mats_cache[win] = mats
 
+                        # 择时过滤预计算 (与手动回测一致)
+                        vol_data_t, vol_thresh_t = None, None
+                        if timing_filter:
+                            vol_data_t = df_factors["vol20d"].reindex(valid_tune.index).fillna(0)
+                            vol_thresh_t = np.percentile(vol_data_t[vol_data_t > 0], 80)
+
                         def optuna_objective(trial):
                             win = trial.suggest_categorical("win", windows)
                             la = trial.suggest_categorical("la", lookaheads)
