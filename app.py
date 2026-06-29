@@ -1339,7 +1339,9 @@ if tab_idx == 7:
                                         })
                         return res
 
-                    def _run_bt_slow(eval_start, eval_end, pearson_mat):
+                    def _run_bt_slow(eval_start, eval_end, pearson_mat, weights=None):
+                        if weights is None:
+                            weights = [1.0 / len(bt_factors)] * len(bt_factors)
                         res = []
                         edays = eval_end - eval_start
                         for ti, t in enumerate(range(eval_start, eval_end)):
