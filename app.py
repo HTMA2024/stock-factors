@@ -1282,6 +1282,27 @@ if tab_idx == 7:
                  ("段均天数", f"{test_seg_avg_days:.1f}" if seg_total > 0 else "-", None, None),
             ])
 
+        # ---- 绩效指标 (盈亏比/Sharpe) ----
+        if len(df_signal) > 0:
+            returns = df_signal["actual_return"].values
+            avg_ret = np.mean(returns) * 100
+            std_ret = np.std(returns) * 100
+            ann_factor = np.sqrt(252 / 3)  # 假设 3 天持仓
+            sharpe = (avg_ret / 100) / (std_ret / 100 + 1e-9) * ann_factor
+            wins = returns[returns > 0]
+            losses = returns[returns < 0]
+            wl = abs(np.mean(wins) / np.mean(losses)) if len(losses) > 0 and len(wins) > 0 else float('inf')
+            st.caption("绩效指标 (单笔信号买入持有到预测结束)")
+            sc1, sc2, sc3, sc4 = st.columns(4)
+            with sc1:
+                st.metric("均收益", f"{avg_ret:+.2f}%")
+            with sc2:
+                st.metric("波动率", f"{std_ret:.2f}%")
+            with sc3:
+                st.metric("Sharpe (年化)", f"{sharpe:.2f}")
+            with sc4:
+                st.metric("盈亏比", f"{wl:.2f}" if wl < 99 else "∞")
+
         # ---- 趋势分层命中率 ----
         if "regime_series" in st.session_state and st.session_state.regime_series is not None and len(df_res) > 0:
             df_res_sorted = df_res.sort_values("date").copy()
