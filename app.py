@@ -1055,14 +1055,14 @@ if tab_idx == 7:
                                 )
 
                             st.caption(f"三段切分: 训练 {train_end - full_start}天 → 验证 {valid_end - train_end}天 → 测试 {end_idx - test_start}天")
-                            results_train = _run_bt_fast(full_start, train_end, combined_corr)
-                            results_valid = _run_bt_fast(train_end, valid_end, combined_corr)
-                            results_test = _run_bt_fast(test_start, end_idx, combined_corr)
+                            results_train = _bt_run(full_start, train_end, combined_corr)
+                            results_valid = _bt_run(train_end, valid_end, combined_corr)
+                            results_test = _bt_run(test_start, end_idx, combined_corr)
                             st.session_state.bt_train_results = results_train if results_train else None
                             st.session_state.bt_valid_results = results_valid if results_valid else None
                             st.session_state.bt_results = results_test if results_test else None
                         else:
-                            results = _run_bt_fast(start_idx, end_idx, combined_corr)
+                            results = _bt_run(start_idx, end_idx, combined_corr)
                             st.session_state.bt_results = results if results else None
                             st.session_state.bt_train_results = None
                             st.session_state.bt_valid_results = None
@@ -1074,14 +1074,14 @@ if tab_idx == 7:
                         with st.spinner(f"正在回测 {total_days} 个交易日..."):
                             if walk_forward:
                                 st.caption(f"三段切分: 训练 {train_end - full_start}天 → 验证 {valid_end - train_end}天 → 测试 {end_idx - test_start}天")
-                                results_train = _run_bt_slow(full_start, train_end, pearson_mat_bt, bt_weight_list)
-                                results_valid = _run_bt_slow(train_end, valid_end, pearson_mat_bt, bt_weight_list)
-                                results_test = _run_bt_slow(test_start, end_idx, pearson_mat_bt, bt_weight_list)
+                                results_train = _bt_run(full_start, train_end, pearson_mat_bt, bt_weight_list)
+                                results_valid = _bt_run(train_end, valid_end, pearson_mat_bt, bt_weight_list)
+                                results_test = _bt_run(test_start, end_idx, pearson_mat_bt, bt_weight_list)
                                 st.session_state.bt_train_results = results_train if results_train else None
                                 st.session_state.bt_valid_results = results_valid if results_valid else None
                                 st.session_state.bt_results = results_test if results_test else None
                             else:
-                                results = _run_bt_slow(start_idx, end_idx, pearson_mat_bt, bt_weight_list)
+                                results = _bt_run(start_idx, end_idx, pearson_mat_bt, bt_weight_list)
                                 st.session_state.bt_results = results if results else None
                                 st.session_state.bt_train_results = None
                                 st.session_state.bt_valid_results = None
