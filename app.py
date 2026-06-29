@@ -205,6 +205,20 @@ SIGNAL_FACTORS = ["sig_macross", "sig_rsizone", "sig_volbreak", "sig_macd", "sig
 from scipy.stats import pearsonr
 
 # ---- 策略增强辅助函数 ----
+def _metric_row(items):
+    """将 (label, value, delta, help) 列表渲染为一行 st.columns"""
+    cols = st.columns(len(items))
+    for col, (label, value, delta, help_text) in zip(cols, items):
+        with col:
+            st.metric(label=label, value=value, delta=delta, help=help_text)
+
+
+def _hit_color(hit, neutral):
+    """命中/未命中/中性 → 颜色 (绿/红/灰)"""
+    if neutral: return "#9e9e9e"
+    return "#26a69a" if hit else "#ef5350"
+
+
 def _plotly_chart(fig, height=400):
     """统一渲染 Plotly 图表"""
     fig.update_layout(
