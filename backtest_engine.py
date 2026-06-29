@@ -279,11 +279,14 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
         act_ret = (price_vals[t + la_eval - 1] - price_vals[t]) / price_vals[t]
         hit, neutral = classify_hit(direction, avg_pred, act_ret, ensemble_mode)
 
-        results_t.append({
+        result = {
             "pred_return": avg_pred,
             "actual_return": act_ret,
             "hit": hit,
             "neutral": neutral,
-        })
+        }
+        if index is not None:
+            result["date"] = index[t]
+        results_t.append(result)
 
     return results_t
