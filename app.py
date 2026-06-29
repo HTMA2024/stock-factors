@@ -961,7 +961,7 @@ if tab_idx == 6:
                             s = _dtw_similarity(tpl_vals, w, min_similarity=0.5)
                         elif algo_name == "pearson_dtw":
                             tpl_widx = tpl_pos - win + 1
-                            cand_widx = i - win + 1
+                            cand_widx = i - win
                             if pearson_mat[tpl_widx, cand_widx] >= 0.3:
                                 s = _dtw_similarity(tpl_vals, w, min_similarity=0.5)
                             else:
