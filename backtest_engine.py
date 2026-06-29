@@ -284,6 +284,8 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
             "actual_return": act_ret,
             "hit": hit,
             "neutral": neutral,
+            "matches": len(top_k_idx),
+            "top_r": float(combined_corr[tpl_idx, top_k_idx[0]]) if len(top_k_idx) > 0 else 0.0,
         }
         if index is not None:
             result["date"] = index[t]
