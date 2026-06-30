@@ -1067,7 +1067,7 @@ if tab_idx == 7:
                                     vals_dict, mat, price_vals, n,
                                     es, ee, w if w else bt_weight_list,
                                     ensemble_mode, timing_filter, vol_data, vol_thresh,
-                                    index=valid_bt.index, low_vals=low_vals,
+                                    index=valid_bt.index,
                                 )
 
                             st.caption(f"三段切分: 训练 {train_end - full_start}天 → 验证 {valid_end - train_end}天 → 测试 {end_idx - test_start}天")
