@@ -994,6 +994,9 @@ if tab_idx == 7:
     walk_forward = st.checkbox("🔬 三段切分验证 (50%训练/20%验证/30%测试)", value=True, key="bt_wf",
                                 help="三段切分, 仅显示测试集结果。关闭则全量回测。")
 
+    tune_regime = st.selectbox("趋势分层优化目标", ["全局", "仅牛市", "仅熊市", "仅震荡"], key="bt_regime",
+                                help="仅自动调参时生效: 指定优化目标市场环境, 搜索对应市况下的最优参数")
+
     col_btns = st.columns(2)
     with col_btns[0]:
         run_bt = st.button("🚀 开始回测", type="primary", key="bt_run", width='stretch')
