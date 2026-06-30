@@ -287,17 +287,6 @@ def _run_batch_backtest(stock_pool, start_date_str, end_date_str, index_code,
         low_vals_t = df_factors.loc[valid.index, "low"].values
         macd_vals_t = df_factors["macd"].reindex(valid.index).fillna(0).values if mom_filter else None
 
-        regime_labels_t = np.full(len(valid), "震荡", dtype=object)
-        close_all = df_factors["close"].reindex(valid.index)
-        ret_20d = close_all / close_all.shift(20) - 1
-        if "vol20d" in df_factors.columns:
-            vol_all = df_factors["vol20d"].reindex(valid.index)
-            vol_med = vol_all.rolling(120, min_periods=40).median()
-            trending_mask = vol_all > vol_med
-            regime_labels_t[(ret_20d > 0.03) & trending_mask] = "牛市"
-            regime_labels_t[(ret_20d < -0.03) & trending_mask] = "熊市"
-        regime_labels_t = regime_labels_t if target_regime is not None else None
-
         vol_data_t, vol_thresh_t = None, None
         if timing_filter:
             vol_data_t = df_factors["vol20d"].reindex(valid.index).fillna(0)
