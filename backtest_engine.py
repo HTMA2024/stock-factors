@@ -311,12 +311,13 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
 
         direction, avg_pred = predict_direction(pred_by_la, ensemble_mode)
 
-        if mom_filter and macd_hist is not None and t > 0:
+        if mom_filter and macd_hist is not None and t > 1:
             if direction > 0:
-                if macd_hist[t] < 0 and macd_hist[t] < macd_hist[t - 1]:
+                # 只用 t-1 及以前的动能做决策，避免在 t 日进场前偷看 t 日全天的结果
+                if macd_hist[t - 1] < 0 and macd_hist[t - 1] < macd_hist[t - 2]:
                     continue
             elif direction < 0:
-                if macd_hist[t] > 0 and macd_hist[t] > macd_hist[t - 1]:
+                if macd_hist[t - 1] > 0 and macd_hist[t - 1] > macd_hist[t - 2]:
                     continue
 
         # 止损 + 摩擦成本
