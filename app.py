@@ -1548,7 +1548,7 @@ if tab_idx == 7:
                                     fs, fe, w_list,
                                     ensemble_mode=ensemble_mode, timing_filter=timing_filter,
                                     vol_data=vol_data_t, vol_thresh=vol_thresh_t,
-                                 low_vals=low_vals_t)
+                                 low_vals=low_vals_t, regime_labels=regime_labels_t, target_regime=target_regime)
                                 m_fold = compute_metrics(results_fold)
                                 if m_fold and m_fold["信号段数"] > 0:
                                     w_scores.append(wilson_lower(m_fold["命中段数"], m_fold["信号段数"]))
