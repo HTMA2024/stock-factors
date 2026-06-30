@@ -1484,6 +1484,7 @@ if tab_idx == 7:
 
                     price_vals_t = df_factors.loc[valid_tune.index, "close"].values
                     low_vals_t = df_factors.loc[valid_tune.index, "low"].values
+                    macd_vals_t = df_factors["macd"].reindex(valid_tune.index).fillna(0).values if mom_filter else None
                     n_factors = len(bt_factors)
 
                     regime_map_t = {"全局": None, "仅牛市": "牛市", "仅熊市": "熊市", "仅震荡": "震荡"}
