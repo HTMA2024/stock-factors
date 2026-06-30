@@ -86,7 +86,19 @@ def load_all_data(symbol: str, start_date: str, end_date: str, index_code: str):
 with st.sidebar:
     st.header("⚙️ 参数设置")
 
-    symbol = st.text_input("股票代码", value="600519", placeholder="600519", max_chars=6)
+    batch_mode = st.radio("回测模式", ["单股精研", "多股批量"], horizontal=True, key="bt_mode")
+
+    if batch_mode == "多股批量":
+        stock_pool_str = st.text_area(
+            "股票池 (逗号分隔)",
+            value="600519, 300750, 002594, 600036, 603259, 601012, 600809, 601899, 002415, 601318",
+            height=100,
+            help="输入多个股票代码, 逗号分隔。批量回测会逐一加载数据并汇总结果。"
+        )
+        stock_pool = [s.strip() for s in stock_pool_str.split(",") if s.strip()]
+        symbol = stock_pool[0] if stock_pool else "600519"
+    else:
+        symbol = st.text_input("股票代码", value="600519", placeholder="600519", max_chars=6)
 
     # 快速时间范围按钮
     st.caption("⚡ 快速时间范围")
