@@ -1127,18 +1127,24 @@ if tab_idx == 7:
                                 min_value=df_factors.index[0],
                                 max_value=df_factors.index[-1], key="bt_end")
 
-    # 策略开关
     st.caption("策略增强")
-    e1, e2, e3 = st.columns(3)
-    with e1:
-        ensemble_mode = st.toggle("集成预测 (多窗口投票)", key="bt_ensemble",
+    e_cols = st.columns(5)
+    with e_cols[0]:
+        ensemble_mode = st.toggle("集成预测", key="bt_ensemble",
                                   help="同时看 3/5/10 天, 多数表决方向")
-    with e2:
-        timing_filter = st.toggle("择时过滤 (高波跳过)", key="bt_timing",
+    with e_cols[1]:
+        timing_filter = st.toggle("高波跳过", key="bt_timing",
                                   help="vol20d > 历史80%分位时不出信号")
-    with e3:
-        mom_filter = st.toggle("动能过滤 (防接飞刀)", key="bt_mom",
-                               help="当MACD柱状图反向加速发散时，强制放弃匹配信号")
+    with e_cols[2]:
+        mom_filter = st.toggle("防接飞刀", key="bt_mom",
+                               help="MACD柱状图反向加速发散时放弃信号")
+    with e_cols[3]:
+        lgbm_filter = st.toggle("LGBM过滤", key="bt_lgbm_filter",
+                                disabled="lgbm_model" not in st.session_state,
+                                help="用LightGBM对每条信号打分, 低分信号标记为中性")
+    with e_cols[4]:
+        if "lgbm_model" in st.session_state and "lgbm_auc" in st.session_state:
+            st.metric("AUC", f"{st.session_state.lgbm_auc:.3f}")
 
     # 快捷预设
     bt_preset_valid = {k: [f for f in v if f in bt_factors_pool] for k, v in FACTOR_PRESETS.items()}
