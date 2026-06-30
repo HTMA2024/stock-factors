@@ -219,7 +219,8 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
                w_list=None, ensemble_mode=False, timing_filter=False,
                vol_data=None, vol_thresh=None, index=None,
                stop_loss=0, low_vals=None,
-               friction_cost=0.004, regime_labels=None, target_regime=None):
+                friction_cost=0.004, regime_labels=None, target_regime=None,
+                mom_filter=False, macd_hist=None):
     """
     在 [eval_start, eval_end) 区间内逐日评价策略。
 
@@ -309,6 +310,15 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
             continue
 
         direction, avg_pred = predict_direction(pred_by_la, ensemble_mode)
+
+        if mom_filter and macd_hist is not None and t > 0:
+            if direction > 0:
+                if macd_hist[t] < 0 and macd_hist[t] < macd_hist[t - 1]:
+                    continue
+            elif direction < 0:
+                if macd_hist[t] > 0 and macd_hist[t] > macd_hist[t - 1]:
+                    continue
+
         # 止损 + 摩擦成本
         entry = price_vals[t]
         if stop_loss > 0 and low_vals is not None and t + la_eval <= n_data:
