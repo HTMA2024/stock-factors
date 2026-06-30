@@ -301,17 +301,19 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
             continue
 
         direction, avg_pred = predict_direction(pred_by_la, ensemble_mode)
-        # 止损: 持有期内最低收盘价触发止损则截断收益
-        hold_slice = price_vals[t:t + la_eval] if t + la_eval <= n_data else price_vals[t:]
-        if len(hold_slice) > 1:
-            entry = price_vals[t]
-            min_close = np.min(hold_slice[1:])  # 持有期最低 (不含入市日)
-            if min_close < entry * (1 - stop_loss):
-                act_ret = -stop_loss
-            else:
-                act_ret = (price_vals[t + la_eval - 1] - entry) / entry
+        # 止损: 优先用盘中最低价, 否则用收盘价
+        entry = price_vals[t]
+        if low_vals is not None and t + la_eval <= n_data:
+            low_slice = low_vals[t + 1:t + la_eval]  # 持有期 (不含入市日)
+            min_price = np.min(low_slice) if len(low_slice) > 0 else entry
         else:
-            act_ret = (price_vals[t + la_eval - 1] - price_vals[t]) / price_vals[t]
+            hold_slice = price_vals[t:t + la_eval] if t + la_eval <= n_data else price_vals[t:]
+            min_price = np.min(hold_slice[1:]) if len(hold_slice) > 1 else entry
+
+        if min_price < entry * (1 - stop_loss):
+            act_ret = -stop_loss - 0.004  # 止损 + 摩擦成本
+        else:
+            act_ret = (price_vals[t + la_eval - 1] - entry) / entry - 0.004  # 正常收益 + 摩擦成本
         hit, neutral = classify_hit(direction, avg_pred, act_ret, ensemble_mode)
 
         result = {
