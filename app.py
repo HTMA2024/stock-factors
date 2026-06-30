@@ -1586,6 +1586,32 @@ if tab_idx == 7:
             with sc4:
                 st.metric("盈亏比", f"{wl:.2f}" if wl < 99 else "∞")
 
+        # ---- LGBM 智能过滤训练 ----
+        has_results = len(df_signal) > 0
+        if has_results:
+            has_lgbm = "lgbm_model" in st.session_state
+            train_lgbm = st.button("🧠 训练 LGBM 过滤器" if not has_lgbm else "🔄 重新训练 LGBM",
+                                   key="train_lgbm", width='stretch',
+                                   help="在本次回测结果上训练树模型, 学习哪些信号特征预示命中")
+            if train_lgbm:
+                with st.spinner("训练 LGBM 中..."):
+                    model, auc, importance = _train_lgbm_filter(st.session_state.bt_results, df_factors)
+                    if model is not None:
+                        st.session_state.lgbm_model = model
+                        st.session_state.lgbm_auc = auc
+                        st.session_state.lgbm_importance = importance
+                        st.success(f"训练完成! AUC = {auc:.3f} | 特征数 = {len(importance)} | 样本 = {len(df_signal)}")
+                        imp_df = pd.DataFrame(
+                            {"特征": list(importance.keys()), "重要性": list(importance.values())}
+                        ).head(10)
+                        imp_fig = go.Figure(go.Bar(x=imp_df["重要性"], y=imp_df["特征"], orientation='h',
+                                                   marker_color='#1f77b4'))
+                        imp_fig.update_layout(height=250, margin=dict(l=120, r=20, t=10, b=10),
+                                              xaxis_title="重要性", yaxis=dict(autorange="reversed"))
+                        _plotly_chart(imp_fig, height=250)
+                    else:
+                        st.warning(f"样本不足 (仅 {len(df_signal) - neutral_count} 条有效信号, 需要 ≥ 50)")
+
         # ---- 趋势分层命中率 ----
         if "regime_series" in st.session_state and st.session_state.regime_series is not None and len(df_res) > 0:
             df_res_sorted = df_res.sort_values("date").copy()
