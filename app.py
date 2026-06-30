@@ -1732,7 +1732,7 @@ if tab_idx == 7:
                                         cv_res = eval_trial(
                                             win, la, th, tk, bt_algo, bt_factors, vtd,
                                             cv_corr, price_vals_t, n_tune, cvs, cve, w_list,
-                                         ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t, low_vals=low_vals_t)
+                                         ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t, low_vals=low_vals_t, regime_labels=regime_labels_t, target_regime=target_regime)
                                         cm = compute_metrics(cv_res)
                                         if cm and cm["信号段数"] > 0:
                                             cv_hits.append(cm["段命中率%"])
