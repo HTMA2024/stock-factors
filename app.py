@@ -1477,6 +1477,10 @@ if tab_idx == 7:
                     low_vals_t = df_factors.loc[valid_tune.index, "low"].values
                     n_factors = len(bt_factors)
 
+                    regime_map_t = {"全局": None, "仅牛市": "牛市", "仅熊市": "熊市", "仅震荡": "震荡"}
+                    target_regime = regime_map_t.get(tune_regime)
+                    regime_labels_t = regime_series.values if target_regime is not None else None
+
                     if use_lgbm and n_factors > 1:
                         # ===== 联合优化: Optuna 同时搜权重 + 参数 =====
                         import optuna
