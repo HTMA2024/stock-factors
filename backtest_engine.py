@@ -217,11 +217,12 @@ def compute_metrics(results):
 def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
                combined_corr, price_vals, n_data, eval_start, eval_end,
                w_list=None, ensemble_mode=False, timing_filter=False,
-               vol_data=None, vol_thresh=None, index=None):
+               vol_data=None, vol_thresh=None, index=None,
+               stop_loss=0.015):
     """
     在 [eval_start, eval_end) 区间内逐日评价策略。
 
-    index: 如提供, 用于给每条结果附加 date 字段
+    stop_loss: 止损阈值 (如 0.015 = -1.5%), 持有期最低收盘价跌破 entry×(1-stop_loss) 则截断
     """
     if w_list is None:
         w_list = [1.0 / len(factor_names)] * len(factor_names)
