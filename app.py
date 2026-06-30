@@ -1046,6 +1046,7 @@ if tab_idx == 7:
                 else:
                     vals_dict = {f: valid_bt[f].values for f in bt_factors}
                     price_vals = df_factors.loc[valid_bt.index, "close"].values
+                    low_vals = df_factors.loc[valid_bt.index, "low"].values
                     win = bt_window
 
                     # 择时过滤阈值 (两个 helper 共享)
