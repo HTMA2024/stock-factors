@@ -1471,6 +1471,7 @@ if tab_idx == 7:
                     algo_label = {"pearson": "Pearson", "dtw": "DTW", "pearson_dtw": "Pearson+DTW"}.get(bt_algo, bt_algo)
 
                     price_vals_t = df_factors.loc[valid_tune.index, "close"].values
+                    low_vals_t = df_factors.loc[valid_tune.index, "low"].values
                     n_factors = len(bt_factors)
 
                     if use_lgbm and n_factors > 1:
