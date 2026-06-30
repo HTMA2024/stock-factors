@@ -300,7 +300,17 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
             continue
 
         direction, avg_pred = predict_direction(pred_by_la, ensemble_mode)
-        act_ret = (price_vals[t + la_eval - 1] - price_vals[t]) / price_vals[t]
+        # 止损: 持有期内最低收盘价触发止损则截断收益
+        hold_slice = price_vals[t:t + la_eval] if t + la_eval <= n_data else price_vals[t:]
+        if len(hold_slice) > 1:
+            entry = price_vals[t]
+            min_close = np.min(hold_slice[1:])  # 持有期最低 (不含入市日)
+            if min_close < entry * (1 - stop_loss):
+                act_ret = -stop_loss
+            else:
+                act_ret = (price_vals[t + la_eval - 1] - entry) / entry
+        else:
+            act_ret = (price_vals[t + la_eval - 1] - price_vals[t]) / price_vals[t]
         hit, neutral = classify_hit(direction, avg_pred, act_ret, ensemble_mode)
 
         result = {
