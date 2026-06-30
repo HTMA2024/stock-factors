@@ -1079,6 +1079,7 @@ if tab_idx == 7:
                                     es, ee, w if w else bt_weight_list,
                                     ensemble_mode, timing_filter, vol_data, vol_thresh,
                                     index=valid_bt.index,
+                                    mom_filter=mom_filter, macd_hist=macd_vals,
                                 )
 
                             st.caption(f"三段切分: 训练 {train_end - full_start}天 → 验证 {valid_end - train_end}天 → 测试 {end_idx - test_start}天")
