@@ -1527,7 +1527,7 @@ if tab_idx == 7:
                                 tune_start, train_end, w_list,
                                 ensemble_mode=ensemble_mode, timing_filter=timing_filter,
                                 vol_data=vol_data_t, vol_thresh=vol_thresh_t,
-                             low_vals=low_vals_t)
+                             low_vals=low_vals_t, regime_labels=regime_labels_t, target_regime=target_regime)
                             m_train = compute_metrics(results_train)
                             if not m_train:
                                 return 0.0
