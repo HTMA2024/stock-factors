@@ -219,13 +219,15 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
                w_list=None, ensemble_mode=False, timing_filter=False,
                vol_data=None, vol_thresh=None, index=None,
                stop_loss=0, low_vals=None,
-               friction_cost=0.004):
+               friction_cost=0.004, regime_labels=None, target_regime=None):
     """
     在 [eval_start, eval_end) 区间内逐日评价策略。
 
     stop_loss: 止损阈值 (如 0.025 = -2.5%), 0 则关闭止损
     low_vals: 每日最低价数组, 用于止损判定
     friction_cost: 单笔交易摩擦成本 (如 0.004 = 0.4%)
+    regime_labels: 每日市场标签数组 (如 牛市/熊市/震荡)
+    target_regime: 目标市场标签, 非 None 时仅评价该标签下的交易日
     """
     if w_list is None:
         w_list = [1.0 / len(factor_names)] * len(factor_names)
