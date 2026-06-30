@@ -218,7 +218,7 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
                combined_corr, price_vals, n_data, eval_start, eval_end,
                w_list=None, ensemble_mode=False, timing_filter=False,
                vol_data=None, vol_thresh=None, index=None,
-               stop_loss=0.025, low_vals=None,
+               stop_loss=0, low_vals=None,
                friction_cost=0.004):
     """
     在 [eval_start, eval_end) 区间内逐日评价策略。
