@@ -309,7 +309,7 @@ def _run_batch_backtest(stock_pool, start_date_str, end_date_str, index_code,
             ensemble_mode=ensemble_mode, timing_filter=timing_filter,
             vol_data=vol_data_t, vol_thresh=vol_thresh_t, low_vals=low_vals_t,
             mom_filter=mom_filter, macd_hist=macd_vals_t,
-            regime_labels=regime_labels_t, target_regime=target_regime,
+            regime_labels=None, target_regime=None,
             index=valid.index,
         )
 
