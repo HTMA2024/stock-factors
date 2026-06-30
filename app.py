@@ -1671,7 +1671,7 @@ if tab_idx == 7:
                                 win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                 combined_corr, price_vals_t, n_tune,
                                 valid_start, valid_end, w_list,
-                             ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t, low_vals=low_vals_t)
+                             ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t, low_vals=low_vals_t, regime_labels=regime_labels_t, target_regime=target_regime)
                             metrics = compute_metrics(results_t)
                             if metrics:
                                 w_str = " | ".join(f"{f}:{w:.0%}" for f, w in zip(bt_factors, w_list))
