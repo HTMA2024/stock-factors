@@ -218,12 +218,14 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
                combined_corr, price_vals, n_data, eval_start, eval_end,
                w_list=None, ensemble_mode=False, timing_filter=False,
                vol_data=None, vol_thresh=None, index=None,
-               stop_loss=0.025, low_vals=None):
+               stop_loss=0.025, low_vals=None,
+               friction_cost=0.004):
     """
     在 [eval_start, eval_end) 区间内逐日评价策略。
 
-    stop_loss: 止损阈值 (如 0.025 = -2.5%), 持有期最低价跌破 entry×(1-stop_loss) 则截断
-    low_vals: 每日最低价数组, 用于止损判定 (盘中最低而非收盘)
+    stop_loss: 止损阈值 (如 0.025 = -2.5%), 0 则关闭止损
+    low_vals: 每日最低价数组, 用于止损判定
+    friction_cost: 单笔交易摩擦成本 (如 0.004 = 0.4%)
     """
     if w_list is None:
         w_list = [1.0 / len(factor_names)] * len(factor_names)
