@@ -268,24 +268,33 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
                     dtw_scores.append((mi, dtw_sim))
             if dtw_scores:
                 dtw_scores.sort(key=lambda x: -x[1])
-                top_k_idx = [x[0] for x in dtw_scores[:tk]]
+                top_k = dtw_scores[:tk]
+                top_k_idx = [x[0] for x in top_k]
+                top_k_w = [x[1] for x in top_k]
             else:
                 continue
         else:
             row_sim = (row + 1) / 2
             match_idx = np.where(row_sim >= th)[0]
             top_k_idx = match_idx[np.argsort(-row_sim[match_idx])[:tk]]
+            top_k_w = list(row_sim[top_k_idx])
 
+        # 置信度加权预测
         pred_by_la = [[] for _ in lheads]
-        for s_idx in top_k_idx:
+        wt_by_la = [[] for _ in lheads]
+        for si, s_idx in enumerate(top_k_idx):
             s_end_pos = s_idx + win - 1
+            w = top_k_w[si] if si < len(top_k_w) else 1.0
             for li, lh in enumerate(lheads):
                 if s_end_pos + 1 + lh <= n_data:
-                    pred_by_la[li].append(
-                        (price_vals[s_end_pos + lh] - price_vals[s_end_pos + 1])
-                        / price_vals[s_end_pos + 1]
-                    )
+                    r = (price_vals[s_end_pos + lh] - price_vals[s_end_pos + 1]) / price_vals[s_end_pos + 1]
+                    pred_by_la[li].append(r)
+                    wt_by_la[li].append(w)
 
+        # 加权平均替代简单 mean
+        for li in range(len(pred_by_la)):
+            if wt_by_la[li]:
+                pred_by_la[li] = [np.average(pred_by_la[li], weights=wt_by_la[li])]
         pred_by_la = [pr for pr in pred_by_la if pr]
         if not pred_by_la:
             continue
