@@ -351,6 +351,77 @@ def _build_batch_curve(all_results):
     return daily_returns, cumulative
 
 
+def _extract_lgbm_features(df_factors, signal_date, signal_info):
+    """从 df_factors 提取信号时刻的市场特征向量"""
+    if signal_date not in df_factors.index:
+        return None
+    row = df_factors.loc[signal_date]
+    feats = {}
+    feats['top_r'] = float(signal_info.get('top_r', 0) or 0)
+    feats['matches'] = int(signal_info.get('matches', 0) or 0)
+    feats['pred_return'] = float(signal_info.get('pred_return', 0) or 0)
+    market_cols = ['rsi14', 'j', 'k', 'd', 'macd', 'dif', 'dea',
+                   'vol_ratio', 'vol20d', 'mom20d', 'bb_pct_b', 'turnover']
+    for col in market_cols:
+        feats[col] = float(row.get(col, 0) or 0) if col in df_factors.columns else 0.0
+    if 'close' in df_factors.columns and 'ma20' in df_factors.columns:
+        feats['close_div_ma20'] = float(row['close'] / max(row.get('ma20', 1), 0.01) - 1) if row.get('ma20') else 0.0
+    if 'close' in df_factors.columns and 'ma60' in df_factors.columns:
+        feats['close_div_ma60'] = float(row['close'] / max(row.get('ma60', 1), 0.01) - 1) if row.get('ma60') else 0.0
+    return feats
+
+
+def _train_lgbm_filter(results, df_factors):
+    """用回测结果训练 LGBM 二分类器 (命中 vs 未命中)"""
+    import lightgbm as lgb
+    from sklearn.metrics import roc_auc_score
+    features_list, labels = [], []
+    for r in results:
+        if r.get('neutral'):
+            continue
+        feat = _extract_lgbm_features(df_factors, r['date'], r)
+        if feat is None:
+            continue
+        features_list.append(feat)
+        labels.append(1 if r['hit'] else 0)
+    if len(features_list) < 50:
+        return None, 0.0, {}
+    X, y = pd.DataFrame(features_list), np.array(labels)
+    split = int(len(X) * 0.7)
+    X_train, X_test = X.iloc[:split], X.iloc[split:]
+    y_train, y_test = y[:split], y[split:]
+    model = lgb.LGBMClassifier(n_estimators=150, max_depth=4, num_leaves=15,
+                                learning_rate=0.03, min_child_samples=50,
+                                subsample=0.7, colsample_bytree=0.7,
+                                reg_alpha=0.5, reg_lambda=0.5,
+                                random_state=42, verbose=-1)
+    model.fit(X_train, y_train, eval_set=[(X_test, y_test)])
+    probas = model.predict_proba(X_test)[:, 1]
+    auc = roc_auc_score(y_test, probas) if len(set(y_test)) > 1 else 0.5
+    importance = dict(sorted(zip(X.columns, model.feature_importances_),
+                             key=lambda x: -x[1]))
+    return model, auc, importance
+
+
+def _lgbm_filter_results(results, model, df_factors, threshold=0.5):
+    """用训练好的 LGBM 模型过滤信号: 概率低于阈值 → neutral"""
+    if model is None:
+        return results, 0
+    filtered = 0
+    for r in results:
+        if r.get('neutral'):
+            continue
+        feat = _extract_lgbm_features(df_factors, r['date'], r)
+        if feat is None:
+            continue
+        prob = model.predict_proba(pd.DataFrame([feat]))[0][1]
+        if prob < threshold:
+            r['neutral'] = True
+            r['hit'] = False
+            filtered += 1
+    return results, filtered
+
+
 # ===========================================================================
 # Tab 1: 价格与技术
 # ===========================================================================
