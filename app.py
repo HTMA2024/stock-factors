@@ -1378,6 +1378,12 @@ if tab_idx == 7:
                                 st.session_state.bt_train_results = None
                                 st.session_state.bt_valid_results = None
 
+            if lgbm_filter and "lgbm_model" in st.session_state and st.session_state.bt_results:
+                st.session_state.bt_results, lgbm_filtered = _lgbm_filter_results(
+                    st.session_state.bt_results, st.session_state.lgbm_model, df_factors)
+                if lgbm_filtered > 0:
+                    st.caption(f"🤖 LGBM 过滤了 {lgbm_filtered} 条低置信度信号")
+
     # ---- 回测结果展示 (从缓存读取, 参数变动不清空) ----
     if "tune_df" in st.session_state and st.session_state.tune_df is not None:
         df_t = st.session_state.tune_df
