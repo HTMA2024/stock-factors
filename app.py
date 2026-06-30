@@ -1612,6 +1612,7 @@ if tab_idx == 7:
                         # ===== 网格搜索 (等权或手动权重) =====
                         st.caption(f"算法: {algo_label} | 三段切分: 训练 {train_days}天 → 验证 {valid_days}天 → 测试 {test_days}天 | 搜索 {total_trials} 种参数组合...")
                         price_vals_t = df_factors.loc[valid_tune.index, "close"].values
+                        low_vals_t = df_factors.loc[valid_tune.index, "low"].values
 
                         train_results = []
                         tune_progress = st.progress(0)
