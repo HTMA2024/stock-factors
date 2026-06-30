@@ -1524,20 +1524,28 @@ if tab_idx == 7:
                                 return 0.0
                             wilson_train = wilson_lower(m_train["命中段数"], m_train["信号段数"])
 
-                            # 验证集 Wilson
-                            results_valid = eval_trial(
-                                win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
-                                combined_corr, price_vals_t, n_tune,
-                                valid_start, valid_end, w_list,
-                                ensemble_mode=ensemble_mode, timing_filter=timing_filter,
-                                vol_data=vol_data_t, vol_thresh=vol_thresh_t,
-                            )
-                            m_valid = compute_metrics(results_valid)
-                            if not m_valid:
-                                return wilson_train * 0.5  # 验证集无信号, 降权
-                            wilson_valid = wilson_lower(m_valid["命中段数"], m_valid["信号段数"])
+                            # 验证集 mini-CV (3 段滚动, 降低单段验证偏好)
+                            cv_folds = 3
+                            cv_step = (valid_end - valid_start) // (cv_folds + 1)
+                            w_scores = []
+                            for fi in range(cv_folds):
+                                fs = valid_start + cv_step * fi
+                                fe = min(valid_start + cv_step * (fi + 2), valid_end)
+                                if fe - fs < 30:
+                                    continue
+                                results_fold = eval_trial(
+                                    win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
+                                    combined_corr, price_vals_t, n_tune,
+                                    fs, fe, w_list,
+                                    ensemble_mode=ensemble_mode, timing_filter=timing_filter,
+                                    vol_data=vol_data_t, vol_thresh=vol_thresh_t,
+                                )
+                                m_fold = compute_metrics(results_fold)
+                                if m_fold and m_fold["信号段数"] > 0:
+                                    w_scores.append(wilson_lower(m_fold["命中段数"], m_fold["信号段数"]))
+                            wilson_valid = np.mean(w_scores) if w_scores else 0.0
 
-                            # 联合目标: 训练 + 验证各 50%
+                            # 联合目标: 训练 + 验证 mini-CV 各 50%
                             return 0.5 * wilson_train + 0.5 * wilson_valid
 
                         n_optuna_trials = 400
