@@ -248,7 +248,7 @@ def _plotly_chart(fig, height=400):
 def _run_batch_backtest(stock_pool, start_date_str, end_date_str, index_code,
                         bt_window, bt_lookahead, bt_threshold, bt_topk, bt_algo,
                         bt_factors, bt_weight_list, ensemble_mode, timing_filter,
-                        mom_filter, target_regime, walk_forward):
+                        mom_filter):
     """多股批量回测: 逐一加载数据 → eval_trial → 汇总结果"""
     from data_fetcher import fetch_daily_ohlcv, fetch_valuation, fetch_financials, fetch_index_daily, correct_ohlcv_prices
 
