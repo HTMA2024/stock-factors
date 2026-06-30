@@ -1009,15 +1009,19 @@ if tab_idx == 7:
             st.warning("请选择匹配因子")
         else:
             valid_bt = df_factors[bt_factors].dropna()
-            # ---- 趋势分层: 为每个交易日贴牛/熊/震荡标签 ----
+            # ---- 趋势分层: 20日动量 + 波动率分类, 无滞后偏差 ----
             regime_labels = np.full(len(valid_bt), "震荡", dtype=object)
-            if "ma60" in df_factors.columns and "ma250" in df_factors.columns:
-                close_all = df_factors["close"].reindex(valid_bt.index)
-                ma60_all = df_factors["ma60"].reindex(valid_bt.index)
-                ma250_all = df_factors["ma250"].reindex(valid_bt.index)
-                ma60_rising = ma60_all > ma60_all.shift(20)
-                regime_labels[(close_all > ma250_all) & ma60_rising] = "牛市"
-                regime_labels[(close_all < ma250_all) & ~ma60_rising] = "熊市"
+            close_all = df_factors["close"].reindex(valid_bt.index)
+            ret_20d = close_all / close_all.shift(20) - 1
+            if "vol20d" in df_factors.columns:
+                vol_all = df_factors["vol20d"].reindex(valid_bt.index)
+                vol_med = vol_all.rolling(120, min_periods=40).median()
+                trending_mask = vol_all > vol_med
+                regime_labels[(ret_20d > 0.03) & trending_mask] = "牛市"
+                regime_labels[(ret_20d < -0.03) & trending_mask] = "熊市"
+            else:
+                regime_labels[ret_20d > 0.03] = "牛市"
+                regime_labels[ret_20d < -0.03] = "熊市"
             regime_series = pd.Series(regime_labels, index=valid_bt.index)
             st.session_state.regime_series = regime_series  # 持久化供展示用
             n = len(valid_bt)
