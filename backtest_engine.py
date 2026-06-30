@@ -249,6 +249,10 @@ def eval_trial(win, la, th, tk, algo, factor_names, vals_dict,
         if hist_end < 0:
             continue
 
+        if target_regime is not None and regime_labels is not None:
+            if regime_labels[t] != target_regime:
+                continue
+
         row = combined_corr[tpl_idx, :hist_end + 1]
 
         if algo == "dtw":
