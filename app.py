@@ -245,6 +245,123 @@ def _plotly_chart(fig, height=400):
     st.plotly_chart(fig)
 
 
+def _run_batch_backtest(stock_pool, start_date_str, end_date_str, index_code,
+                        bt_window, bt_lookahead, bt_threshold, bt_topk, bt_algo,
+                        bt_factors, bt_weight_list, ensemble_mode, timing_filter,
+                        mom_filter, target_regime, walk_forward):
+    """多股批量回测: 逐一加载数据 → eval_trial → 汇总结果"""
+    from data_fetcher import fetch_daily_ohlcv, fetch_valuation, fetch_financials, fetch_index_daily, correct_ohlcv_prices
+
+    all_results = []
+    stock_summaries = []
+    progress = st.progress(0)
+    status = st.empty()
+
+    for i, sym in enumerate(stock_pool):
+        status.text(f"⏳ {sym} ({i + 1}/{len(stock_pool)}) 加载数据...")
+
+        try:
+            df_daily_raw = fetch_daily_ohlcv(sym, start_date_str, end_date_str)
+            df_valuation = fetch_valuation(sym)
+            df_financials = fetch_financials(sym)
+            df_daily = correct_ohlcv_prices(df_daily_raw, df_valuation, df_financials)
+            try:
+                df_index = fetch_index_daily(index_code, start_date_str, end_date_str)
+            except Exception:
+                df_index = None
+            df_factors = compute_all_factors(df_daily, df_valuation, df_financials, df_index)
+            df_factors = df_factors[df_factors.index >= pd.Timestamp(start_date_str)]
+        except Exception as e:
+            st.warning(f"{sym} 数据加载失败: {e}")
+            progress.progress((i + 1) / len(stock_pool))
+            continue
+
+        valid = df_factors[bt_factors].dropna()
+        n = len(valid)
+        if n < bt_window * 5:
+            st.warning(f"{sym} 数据不足 ({n} 天)")
+            progress.progress((i + 1) / len(stock_pool))
+            continue
+
+        price_vals_t = df_factors.loc[valid.index, "close"].values
+        low_vals_t = df_factors.loc[valid.index, "low"].values
+        macd_vals_t = df_factors["macd"].reindex(valid.index).fillna(0).values if mom_filter else None
+
+        regime_labels_t = np.full(len(valid), "震荡", dtype=object)
+        close_all = df_factors["close"].reindex(valid.index)
+        ret_20d = close_all / close_all.shift(20) - 1
+        if "vol20d" in df_factors.columns:
+            vol_all = df_factors["vol20d"].reindex(valid.index)
+            vol_med = vol_all.rolling(120, min_periods=40).median()
+            trending_mask = vol_all > vol_med
+            regime_labels_t[(ret_20d > 0.03) & trending_mask] = "牛市"
+            regime_labels_t[(ret_20d < -0.03) & trending_mask] = "熊市"
+        regime_labels_t = regime_labels_t if target_regime is not None else None
+
+        vol_data_t, vol_thresh_t = None, None
+        if timing_filter:
+            vol_data_t = df_factors["vol20d"].reindex(valid.index).fillna(0)
+            vol_thresh_t = np.percentile(vol_data_t[vol_data_t > 0], 80)
+
+        vals_dict_t = {f: valid[f].values for f in bt_factors}
+        combined_corr = pearson_corr_matrix([vals_dict_t[f] for f in bt_factors], bt_window, bt_weight_list)
+
+        return_s, return_e = resolve_date_range(valid.index, start_date_str, end_date_str, bt_window * 2)
+        return_e = min(return_e, n - (10 if ensemble_mode else bt_lookahead))
+
+        if return_e - return_s < 30:
+            progress.progress((i + 1) / len(stock_pool))
+            continue
+
+        results = eval_trial(
+            bt_window, bt_lookahead, bt_threshold, bt_topk, bt_algo, bt_factors,
+            vals_dict_t, combined_corr, price_vals_t, n,
+            return_s, return_e, bt_weight_list,
+            ensemble_mode=ensemble_mode, timing_filter=timing_filter,
+            vol_data=vol_data_t, vol_thresh=vol_thresh_t, low_vals=low_vals_t,
+            mom_filter=mom_filter, macd_hist=macd_vals_t,
+            regime_labels=regime_labels_t, target_regime=target_regime,
+            index=valid.index,
+        )
+
+        if results:
+            for r in results:
+                r["symbol"] = sym
+            all_results.extend(results)
+
+            metrics = compute_metrics(results)
+            if metrics:
+                stock_summaries.append({
+                    "代码": sym,
+                    "信号段数": metrics["信号段数"],
+                    "段命中率%": metrics["段命中率%"],
+                    "原始命中%": metrics["原始命中率%"],
+                    "有效信号日": metrics["有效信号日"],
+                    "中性日": metrics["中性日"],
+                    "均收益%": metrics["均收益%"],
+                    "Sharpe": metrics["Sharpe"],
+                    "盈亏比": metrics["盈亏比"],
+                })
+
+        progress.progress((i + 1) / len(stock_pool))
+
+    status.text("")
+    return all_results, stock_summaries
+
+
+def _build_batch_curve(all_results):
+    """从批量回测结果构建合并资金曲线"""
+    if not all_results:
+        return None, None
+    df = pd.DataFrame(all_results)
+    sig = df[~df["neutral"]]
+    if len(sig) == 0:
+        return None, None
+    daily_returns = sig.groupby("date")["actual_return"].mean().sort_index()
+    cumulative = (1 + daily_returns).cumprod()
+    return daily_returns, cumulative
+
+
 # ===========================================================================
 # Tab 1: 价格与技术
 # ===========================================================================
