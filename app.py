@@ -1491,6 +1491,12 @@ if tab_idx == 7:
                     target_regime = regime_map_t.get(tune_regime)
                     regime_labels_t = regime_series.values if target_regime is not None else None
 
+                    # 择时过滤预计算 (供 Optuna 和网格搜索两路共用)
+                    vol_data_t, vol_thresh_t = None, None
+                    if timing_filter:
+                        vol_data_t = df_factors["vol20d"].reindex(valid_tune.index).fillna(0)
+                        vol_thresh_t = np.percentile(vol_data_t[vol_data_t > 0], 80)
+
                     if use_lgbm and n_factors > 1:
                         # ===== 联合优化: Optuna 同时搜权重 + 参数 =====
                         import optuna
@@ -1509,12 +1515,6 @@ if tab_idx == 7:
                                 Wz = (W - mean) / std
                                 mats.append((Wz @ Wz.T) / (win - 1))
                             factor_mats_cache[win] = mats
-
-                        # 择时过滤预计算 (与手动回测一致)
-                        vol_data_t, vol_thresh_t = None, None
-                        if timing_filter:
-                            vol_data_t = df_factors["vol20d"].reindex(valid_tune.index).fillna(0)
-                            vol_thresh_t = np.percentile(vol_data_t[vol_data_t > 0], 80)
 
                         def optuna_objective(trial):
                             win = trial.suggest_categorical("win", windows)
@@ -1628,8 +1628,6 @@ if tab_idx == 7:
                     else:
                         # ===== 网格搜索 (等权或手动权重) =====
                         st.caption(f"算法: {algo_label} | 三段切分: 训练 {train_days}天 → 验证 {valid_days}天 → 测试 {test_days}天 | 搜索 {total_trials} 种参数组合...")
-                        price_vals_t = df_factors.loc[valid_tune.index, "close"].values
-                        low_vals_t = df_factors.loc[valid_tune.index, "low"].values
 
                         train_results = []
                         tune_progress = st.progress(0)
