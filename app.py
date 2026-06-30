@@ -1129,6 +1129,75 @@ if tab_idx == 7:
     tune_regime = st.selectbox("趋势分层优化目标", ["全局", "仅牛市", "仅熊市", "仅震荡"], key="bt_regime",
                                 help="仅自动调参时生效: 指定优化目标市场环境, 搜索对应市况下的最优参数")
 
+    # ---- 多股批量回测 (仅在 batch_mode 时显示) ----
+    if batch_mode == "多股批量" and bt_factors:
+        st.divider()
+        st.subheader("📊 多股批量回测")
+
+        run_batch = st.button("🚀 开始批量回测", type="primary", key="batch_run", width='stretch',
+                              help=f"在 {len(stock_pool)} 只股票上运行当前参数组合, 汇总所有信号")
+
+        if run_batch:
+            start_str = start_date.strftime("%Y%m%d") if hasattr(start_date, "strftime") else str(start_date).replace("-", "")[:8]
+            end_str = end_date.strftime("%Y%m%d") if hasattr(end_date, "strftime") else str(end_date).replace("-", "")[:8]
+
+            with st.spinner("批量回测运行中..."):
+                all_results, stock_summaries = _run_batch_backtest(
+                    stock_pool, start_str, end_str, index_code,
+                    bt_window, bt_lookahead, bt_threshold, bt_topk, bt_algo,
+                    bt_factors, bt_weight_list,
+                    ensemble_mode, timing_filter, mom_filter,
+                )
+
+            if stock_summaries:
+                df_summary = pd.DataFrame(stock_summaries)
+                df_summary = df_summary.sort_values("段命中率%", ascending=False)
+
+                st.subheader("📋 各股票成绩单")
+                st.dataframe(
+                    df_summary,
+                    width='stretch', hide_index=True,
+                    column_config={
+                        "段命中率%": st.column_config.NumberColumn(format="%.1f%%"),
+                        "原始命中%": st.column_config.NumberColumn(format="%.1f%%"),
+                        "均收益%": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Sharpe": st.column_config.NumberColumn(format="%.2f"),
+                        "盈亏比": st.column_config.NumberColumn(format="%.2f"),
+                    }
+                )
+
+                st.subheader("📈 合并资金曲线 (等权分散)")
+                daily_ret, cumulative = _build_batch_curve(all_results)
+                if daily_ret is not None and len(daily_ret) > 0:
+                    avg_ret_all = daily_ret.mean() * 100
+                    total_sig = len(daily_ret)
+                    total_segments = df_summary["信号段数"].sum()
+                    avg_hit_rate = df_summary["段命中率%"].mean()
+
+                    mc1, mc2, mc3, mc4 = st.columns(4)
+                    with mc1:
+                        st.metric("合并交易天数", total_sig, help="多只股票同一天有信号时取平均收益")
+                    with mc2:
+                        st.metric("总信号段数", int(total_segments))
+                    with mc3:
+                        st.metric("平均均收益%", f"{avg_ret_all:.2f}%")
+                    with mc4:
+                        st.metric("平均段命中率%", f"{avg_hit_rate:.1f}%")
+
+                    batch_fig = go.Figure()
+                    batch_fig.add_trace(go.Scatter(
+                        x=cumulative.index, y=cumulative.values,
+                        mode='lines', name='合并资金曲线',
+                        line=dict(color='#1f77b4', width=2),
+                        fill='tozeroy', fillcolor='rgba(31,119,180,0.08)',
+                    ))
+                    batch_fig.add_hline(y=1, line_dash="dash", line_color="gray", opacity=0.5)
+                    _plotly_chart(batch_fig, height=350)
+                else:
+                    st.warning("未生成任何有效交易信号")
+            else:
+                st.warning("所有股票均未生成有效交易信号。请调整参数或扩大日期范围。")
+
     col_btns = st.columns(2)
     with col_btns[0]:
         run_bt = st.button("🚀 开始回测", type="primary", key="bt_run", width='stretch')
