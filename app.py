@@ -1520,7 +1520,7 @@ if tab_idx == 7:
                                 tune_start, train_end, w_list,
                                 ensemble_mode=ensemble_mode, timing_filter=timing_filter,
                                 vol_data=vol_data_t, vol_thresh=vol_thresh_t,
-                            )
+                             low_vals=low_vals_t)
                             m_train = compute_metrics(results_train)
                             if not m_train:
                                 return 0.0
@@ -1541,7 +1541,7 @@ if tab_idx == 7:
                                     fs, fe, w_list,
                                     ensemble_mode=ensemble_mode, timing_filter=timing_filter,
                                     vol_data=vol_data_t, vol_thresh=vol_thresh_t,
-                                )
+                                 low_vals=low_vals_t)
                                 m_fold = compute_metrics(results_fold)
                                 if m_fold and m_fold["信号段数"] > 0:
                                     w_scores.append(wilson_lower(m_fold["命中段数"], m_fold["信号段数"]))
@@ -1587,7 +1587,7 @@ if tab_idx == 7:
                                 win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                 combined_corr, price_vals_t, n_tune,
                                 tune_start, train_end, w_list,
-                             ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t)
+                             ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t, low_vals=low_vals_t)
                             metrics = compute_metrics(results_t)
                             if metrics:
                                 w_str = " | ".join(f"{f}:{w:.0%}" for f, w in zip(bt_factors, w_list))
@@ -1628,7 +1628,7 @@ if tab_idx == 7:
                                             win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                             combined_corr, price_vals_t, n_tune,
                                             tune_start, train_end, bt_weight_list,
-                                         ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t)
+                                         ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t, low_vals=low_vals_t)
                                         metrics = compute_metrics(results_t)
                                         if metrics:
                                             train_results.append({
@@ -1663,7 +1663,7 @@ if tab_idx == 7:
                                 win, la, th, tk, bt_algo, bt_factors, vals_dict_t,
                                 combined_corr, price_vals_t, n_tune,
                                 valid_start, valid_end, w_list,
-                             ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t)
+                             ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t, low_vals=low_vals_t)
                             metrics = compute_metrics(results_t)
                             if metrics:
                                 w_str = " | ".join(f"{f}:{w:.0%}" for f, w in zip(bt_factors, w_list))
@@ -1708,7 +1708,7 @@ if tab_idx == 7:
                                     win, la, th, tk, bt_algo, bt_factors,
                                     vals_dict_t, combined_corr, price_vals_t, n_tune,
                                     test_start, tune_end, w_list,
-                                 ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t)
+                                 ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t, low_vals=low_vals_t)
                                 test_metrics = compute_metrics(results_t)
                                 if test_metrics:
                                     # 时间交叉验证: 3 个滚动窗口
@@ -1724,7 +1724,7 @@ if tab_idx == 7:
                                         cv_res = eval_trial(
                                             win, la, th, tk, bt_algo, bt_factors, vtd,
                                             cv_corr, price_vals_t, n_tune, cvs, cve, w_list,
-                                         ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t)
+                                         ensemble_mode=ensemble_mode, timing_filter=timing_filter, vol_data=vol_data_t, vol_thresh=vol_thresh_t, low_vals=low_vals_t)
                                         cm = compute_metrics(cv_res)
                                         if cm and cm["信号段数"] > 0:
                                             cv_hits.append(cm["段命中率%"])
